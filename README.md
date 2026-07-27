@@ -18,6 +18,7 @@ Granola'dan ilham alan, **tamamen yerel çalışan** bir Türkçe yapay zeka top
 - [Sorun Giderme](#sorun-giderme)
 - [Testler](#testler)
 - [Değerlendirme Kontrol Listesi](#değerlendirme-kontrol-listesi)
+- [Bilinen Sınırlamalar](#bilinen-sınırlamalar)
 
 ## Hızlı Başlangıç
 
@@ -112,8 +113,8 @@ cd apps/web && npm run dev
 `OPENROUTER_API_KEY` boş bırakılırsa veya `ENABLE_EXTERNAL_AI=false` yapılırsa:
 
 - Transkripsiyon yine tamamen çalışır (faster-whisper yerel).
-- Özet, konular, kararlar ve yapılacaklar **basit bir yerel çıkarım algoritmasıyla** (cümle skorlama + anahtar kelime tarama) üretilir.
-- Soru-cevap, BM25 benzeri yerel arama ile en alakalı döküm bölümünü döndürür.
+- Özet, konular, kararlar ve yapılacaklar **basit bir yerel çıkarım algoritmasıyla** (cümle skorlama + anahtar kelime tarama) üretilir. Yapılacaklar için sorumlu kişi ve tarih, yalnızca cümlede **açıkça** geçiyorsa (büyük harfle başlayan olası bir isim, veya "cuma/salı/yarın" gibi bir tarih ifadesi) çıkarılır; aksi halde `null` bırakılır, asla uydurulmaz.
+- Soru-cevap, BM25 benzeri yerel arama ile en alakalı döküm bölümünü döndürür. Yalnızca "var/yok" gibi çok genel kelimelerin örtüşmesi kanıt sayılmaz — ilgisiz bir soru için "Bu bilgi toplantı içeriğinde bulunmuyor." döner.
 - Arayüzde bu durum her zaman **"yerel bir çıkarım yöntemiyle oluşturuldu"** notuyla açıkça belirtilir; hiçbir zaman bir AI özeti gibi sunulmaz.
 
 ## Demo Verisi
@@ -153,6 +154,8 @@ docs/     Demo script and supplementary docs
 
 **Processing pipeline** (`apps/api/app/services/pipeline.py`): upload → ffmpeg conversion to 16kHz mono WAV → faster-whisper transcription (segments persisted to SQLite **before** any AI call, so a later failure never loses transcription work) → OpenRouter analysis (or local fallback) → action-item extraction (or local fallback) → ready. Each stage updates `Meeting.processing_stage`, polled by the frontend every 2s for truthful, non-fabricated progress.
 
+**No-speech handling** (`apps/api/app/services/transcription.py`): transcription first runs with VAD (voice-activity detection) filtering. If VAD strips all audio (e.g. a silent or non-speech file), it retries once **without** VAD. If both attempts return zero segments, the pipeline raises a clear error surfaced verbatim on the meeting's error screen — "Ses dosyasında konuşma algılanamadı..." — and analysis is never run against an empty transcript.
+
 **Structured AI output**: LLM responses are requested as JSON matching a Pydantic schema (`AnalysisLLMResult`, `ActionItemListLLM`). One repair attempt is made on parse failure; if that also fails, the local fallback is used — malformed JSON is never persisted, and raw model errors are never shown to the user.
 
 **Grounded Q&A** (`apps/api/app/services/qa.py`): transcript segments are chunked and ranked with a lightweight BM25-like scorer (no vector DB). Only the top-ranked excerpts are sent to the LLM, explicitly marked as untrusted source data in the system prompt (prompt-injection mitigation). If no relevant excerpt is found, the API returns "Bu bilgi toplantı içeriğinde bulunmuyor." without calling the LLM.
@@ -172,6 +175,9 @@ Paylaşım penceresinde "Sekme sesini paylaş" kutucuğunun işaretli olduğunda
 
 **Transkripsiyon çok yavaş**
 `WHISPER_MODEL=tiny` veya `base` deneyin (doğruluk düşer, hız artar). GPU'nuz varsa `WHISPER_DEVICE=cuda` ve uygun `ctranslate2` derlemesini kullanabilirsiniz.
+
+**İlk toplantı işlemesi beklenenden uzun sürüyor**
+Whisper modeli **tembel yüklenir** (lazy-loaded): ilk transkripsiyon isteğinde model dosyaları Hugging Face üzerinden internetten indirilip yerel önbelleğe (`~/.cache/huggingface`) kaydedilir, bu birkaç dakika sürebilir. Sonraki tüm işlemler bu önbellekten çalışır ve internet gerektirmez.
 
 **OpenRouter isteği başarısız oluyor**
 Uygulama otomatik olarak yerel çıkarım moduna düşer, çökmez. `OPENROUTER_API_KEY` ve `OPENROUTER_MODEL` değerlerini kontrol edin; ücretsiz modelin adı zamanla değişebilir, https://openrouter.ai/models?max_price=0 üzerinden güncel bir tane seçin.
@@ -212,6 +218,26 @@ npm run build
 - [x] Türkçe arayüz
 - [x] Testler ve build'ler geçiyor
 
----
+## Bilinen Sınırlamalar
 
-**Gizlilik notu**: Tüm toplantı verileri varsayılan olarak yalnızca bilgisayarınızdaki SQLite veritabanında (`apps/api/data/granola.db`) ve dosya sisteminde (`apps/api/storage/`) saklanır. Ham ses kaydı hiçbir zaman OpenRouter'a veya başka bir dış servise gönderilmez; yalnızca soru-cevap ve analiz için ilgili döküm metni gönderilir, bunu da `ENABLE_EXTERNAL_AI=false` ile tamamen kapatabilirsiniz.
+- **Yerel modda sorumlu/tarih çıkarımı bir sezgiseldir, NER modeli değil**: Büyük harfle başlayan bir kelime yaygın bir isim (Ahmet, Elif) sanılıp yanlışlıkla sorumlu olarak işaretlenebilir; bilinen genel isimler (Rapor, Toplantı, Bütçe vb.) hariç tutulmuştur ama liste kapsayıcı değildir. OpenRouter etkinken bu sınırlama geçerli değildir (LLM bağlamsal olarak karar verir).
+- **Konuşmacı ayrımı (diarization) yoktur**: Döküm zaman damgasına göre sıralanır, ama "kim konuştu" bilgisi tutulmaz.
+- **faster-whisper `small` modeli** varsayılandır; gürültülü/aksanlı ses veya çok kısa/düşük kaliteli kayıtlarda doğruluk düşebilir. Daha iyi sonuç için `WHISPER_MODEL=medium` veya `large-v3` denenebilir (daha yavaş).
+- **OpenRouter ücretsiz modelleri zaman zaman değişir/kaldırılır**; `OPENROUTER_MODEL` güncel tutulmalıdır.
+- **Mobil ekranlarda temel bir duyarlı (responsive) düzen** vardır; kapsamlı bir görsel/erişilebilirlik denetimi bu aşamada yapılmamıştır (Faz 3'e bırakılmıştır).
+
+## Sürüm Notları (Phase 2 QA)
+
+Bu sürümde QA taraması sırasında bulunup düzeltilen gerçek hatalar:
+
+- **Sessiz/konuşmasız ses dosyaları artık sessizce boş bir toplantı üretmiyor**: VAD tüm sesi filtrelerse bir kez VAD'siz tekrar denenir; ikisi de başarısız olursa toplantı net bir Türkçe hatayla `error` durumuna geçer ve analiz hiçbir zaman boş dökümle çalıştırılmaz.
+- **Grounded soru-cevapta yanlış-pozitif "kanıt" sorunu giderildi**: "var/yok" gibi çok genel kelimelerin tek başına örtüşmesi artık kanıt sayılmıyor; ilgisiz sorular doğru şekilde "Bu bilgi toplantı içeriğinde bulunmuyor." döndürüyor.
+- **Yerel (AI'sız) yapılacaklar çıkarımı artık açıkça belirtilen sorumlu/tarih bilgisini de yakalıyor** (önceden bu alanlar yerel modda her zaman boş bırakılıyordu).
+- **Zaman damgası saat dilimi hatası düzeltildi**: SQLite üzerinden okunan tarihler saat dilimi bilgisini kaybediyordu; bu da "3 saat önce" gibi yanlış görece zamanlara yol açıyordu. Artık tüm zaman damgaları UTC olarak işaretlenip doğru şekilde yerelleştiriliyor.
+- Aynı toplantı için art arda "Yeniden Analiz Et" çağrısı artık kafa karıştırıcı bir 400 yerine net bir "zaten işleniyor" (409) hatası veriyor.
+
+## Gizlilik ve GitHub Güvenliği
+
+Tüm toplantı verileri varsayılan olarak yalnızca bilgisayarınızdaki SQLite veritabanında (`apps/api/data/granola.db`) ve dosya sisteminde (`apps/api/storage/`) saklanır. Ham ses kaydı hiçbir zaman OpenRouter'a veya başka bir dış servise gönderilmez; yalnızca soru-cevap ve analiz için ilgili döküm metni gönderilir, bunu da `ENABLE_EXTERNAL_AI=false` ile tamamen kapatabilirsiniz.
+
+`.gitignore`, aşağıdakilerin hiçbir zaman commit edilmemesini sağlar: `.env` dosyaları, SQLite veritabanı, ses/video kayıtları (`storage/recordings`, `storage/uploads`), indirilen Whisper model dosyaları, sanal ortam (`.venv`) ve derleme çıktıları (`.next`). API anahtarları yalnızca `apps/api/.env` içinde tutulur ve hiçbir API yanıtında tarayıcıya gönderilmez.
