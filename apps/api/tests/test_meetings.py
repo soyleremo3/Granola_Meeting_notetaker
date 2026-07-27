@@ -9,6 +9,14 @@ def test_create_and_get_meeting(client):
     assert meeting["title"] == "Test Toplantısı"
     assert meeting["status"] == "uploaded"
 
+
+def test_meeting_timestamps_are_timezone_aware_utc(client):
+    # A naive (offset-less) timestamp is misread as local time by the frontend's
+    # `new Date(iso)`, skewing every displayed "x saat önce" by the browser's UTC offset.
+    meeting = _create_meeting(client)
+    assert meeting["created_at"].endswith("+00:00") or meeting["created_at"].endswith("Z")
+    assert meeting["updated_at"].endswith("+00:00") or meeting["updated_at"].endswith("Z")
+
     resp = client.get(f"/api/meetings/{meeting['id']}")
     assert resp.status_code == 200
     assert resp.json()["id"] == meeting["id"]
@@ -110,3 +118,21 @@ def test_process_without_media_rejected(client):
     meeting = _create_meeting(client)
     resp = client.post(f"/api/meetings/{meeting['id']}/process")
     assert resp.status_code == 400
+
+
+def test_regenerate_analysis_while_already_processing_returns_409(client):
+    from app import models
+    from app.database import SessionLocal
+
+    meeting = _create_meeting(client)
+    db = SessionLocal()
+    try:
+        row = db.query(models.Meeting).filter(models.Meeting.id == meeting["id"]).first()
+        row.status = "processing"
+        db.commit()
+    finally:
+        db.close()
+
+    resp = client.post(f"/api/meetings/{meeting['id']}/analyze")
+    assert resp.status_code == 409
+    assert "zaten işleniyor" in resp.json()["detail"]

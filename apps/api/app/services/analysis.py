@@ -151,8 +151,30 @@ def _parse_with_repair(raw: str, model_cls, system_prompt: str, user_content: st
 # --- Local fallback (no external AI) ---
 
 _STOPWORDS = {
-    "ve", "bir", "bu", "şu", "o", "ile", "de", "da", "için", "gibi", "ama", "fakat",
-    "çok", "daha", "en", "ki", "mi", "mı", "mu", "mü", "ne", "her", "ya", "veya",
+    "ve",
+    "bir",
+    "bu",
+    "şu",
+    "o",
+    "ile",
+    "de",
+    "da",
+    "için",
+    "gibi",
+    "ama",
+    "fakat",
+    "çok",
+    "daha",
+    "en",
+    "ki",
+    "mi",
+    "mı",
+    "mu",
+    "mü",
+    "ne",
+    "her",
+    "ya",
+    "veya",
 }
 
 _TASK_CUES = re.compile(
@@ -161,6 +183,90 @@ _TASK_CUES = re.compile(
     r"teslim|deadline|son tarih|todo|to-do)",
     re.IGNORECASE,
 )
+
+# A capitalized first word is treated as a possible assignee name, unless it's one of these
+# common Turkish sentence-starters that are capitalized only because they open a sentence.
+_NON_NAME_SENTENCE_STARTERS = {
+    "ayrıca",
+    "ancak",
+    "fakat",
+    "ama",
+    "son",
+    "ilk",
+    "eğer",
+    "çünkü",
+    "yani",
+    "şimdi",
+    "peki",
+    "tamam",
+    "genel",
+    "bugün",
+    "yarın",
+    "bunun",
+    "bunu",
+    "böylece",
+    "sonra",
+    "önce",
+    "şu",
+    "bu",
+    "biz",
+    "ben",
+    "sen",
+    "onlar",
+    "herkes",
+    "kimse",
+    # Common meeting-vocabulary nouns that are capitalized only as sentence-starters —
+    # excluded so they aren't mistaken for a person's name.
+    "rapor",
+    "toplantı",
+    "proje",
+    "bütçe",
+    "ekip",
+    "takım",
+    "sistem",
+    "ürün",
+    "müşteri",
+    "sunum",
+    "görev",
+    "plan",
+    "departman",
+    "sözleşme",
+    "teklif",
+    "test",
+    "tasarım",
+    "doküman",
+    "belge",
+    "veri",
+    "sonuç",
+    "durum",
+}
+
+_ASSIGNEE_PATTERN = re.compile(r"^([A-ZÇĞİÖŞÜ][a-zçğıöşü]+)\b")
+
+_DUE_DATE_PATTERN = re.compile(
+    r"\b(bugün|yarın|öbür gün|pazartesi(?:ye|si)?|salı(?:ya)?|çarşamba(?:ya)?|perşembe(?:ye)?|"
+    r"cuma(?:ya)?|cumartesi(?:ye)?|pazar(?:a)?|bu hafta|gelecek hafta|önümüzdeki hafta|"
+    r"bu ay|gelecek ay|önümüzdeki ay)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_assignee(text: str) -> str | None:
+    """Best-effort local heuristic: a capitalized leading word that isn't a stopword or a
+    common sentence-starter is treated as an explicit name. Never guesses when absent."""
+    match = _ASSIGNEE_PATTERN.match(text.strip())
+    if not match:
+        return None
+    candidate = match.group(1)
+    lowered = candidate.lower()
+    if lowered in _STOPWORDS or lowered in _NON_NAME_SENTENCE_STARTERS or len(candidate) < 2:
+        return None
+    return candidate
+
+
+def _extract_due_date(text: str) -> str | None:
+    match = _DUE_DATE_PATTERN.search(text)
+    return match.group(1).capitalize() if match else None
 
 
 def _fallback_summary(segments: list) -> AnalysisLLMResult:
@@ -230,8 +336,8 @@ def _fallback_action_items(segments: list) -> ActionItemListLLM:
             items.append(
                 ActionItemLLM(
                     description=_shorten(seg.text, 300),
-                    assignee=None,
-                    due_date=None,
+                    assignee=_extract_assignee(seg.text),
+                    due_date=_extract_due_date(seg.text),
                     priority="medium",
                     source_timestamp=seg.start_time,
                     confidence=0.35,

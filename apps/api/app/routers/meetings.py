@@ -74,9 +74,11 @@ def list_meetings(
 
     if search:
         like = f"%{search}%"
-        query = query.outerjoin(models.TranscriptSegment).filter(
-            or_(models.Meeting.title.ilike(like), models.TranscriptSegment.text.ilike(like))
-        ).distinct()
+        query = (
+            query.outerjoin(models.TranscriptSegment)
+            .filter(or_(models.Meeting.title.ilike(like), models.TranscriptSegment.text.ilike(like)))
+            .distinct()
+        )
 
     if status_filter:
         query = query.filter(models.Meeting.status == status_filter)
@@ -149,17 +151,22 @@ def start_processing(meeting_id: str, background_tasks: BackgroundTasks, db: Ses
     db.commit()
 
     background_tasks.add_task(pipeline.run_full_pipeline, meeting_id, meeting.media_path)
-    return schemas.ProcessingStatus(status=meeting.status, stage_label=stage_label_for(meeting.status, meeting.processing_stage))
+    return schemas.ProcessingStatus(
+        status=meeting.status, stage_label=stage_label_for(meeting.status, meeting.processing_stage)
+    )
 
 
 @router.post("/{meeting_id}/analyze", response_model=schemas.ProcessingStatus)
 def regenerate_analysis(meeting_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     meeting = _get_meeting_or_404(db, meeting_id)
+    if meeting.status == "processing":
+        raise HTTPException(status_code=409, detail="Bu toplantı zaten işleniyor.")
     if meeting.status not in ("transcribed", "ready", "error"):
         raise HTTPException(status_code=400, detail="Analiz için önce dökümün hazır olması gerekiyor.")
 
     has_segments = (
-        db.query(models.TranscriptSegment).filter(models.TranscriptSegment.meeting_id == meeting_id).count() > 0
+        db.query(models.TranscriptSegment).filter(models.TranscriptSegment.meeting_id == meeting_id).count()
+        > 0
     )
     if not has_segments:
         raise HTTPException(status_code=400, detail="Yeniden analiz için önce döküm oluşturulmalı.")
@@ -170,7 +177,9 @@ def regenerate_analysis(meeting_id: str, background_tasks: BackgroundTasks, db: 
     db.commit()
 
     background_tasks.add_task(pipeline.run_analysis_only, meeting_id)
-    return schemas.ProcessingStatus(status=meeting.status, stage_label=stage_label_for(meeting.status, meeting.processing_stage))
+    return schemas.ProcessingStatus(
+        status=meeting.status, stage_label=stage_label_for(meeting.status, meeting.processing_stage)
+    )
 
 
 @router.get("/{meeting_id}/status", response_model=schemas.ProcessingStatus)
@@ -223,7 +232,9 @@ def get_audio(meeting_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{meeting_id}/export")
-def export_meeting(meeting_id: str, kind: str = "transcript", fmt: str = "txt", db: Session = Depends(get_db)):
+def export_meeting(
+    meeting_id: str, kind: str = "transcript", fmt: str = "txt", db: Session = Depends(get_db)
+):
     meeting = _get_meeting_or_404(db, meeting_id)
     segments = (
         db.query(models.TranscriptSegment)
@@ -244,10 +255,10 @@ def export_meeting(meeting_id: str, kind: str = "transcript", fmt: str = "txt", 
             content = export_service.transcript_to_txt(meeting, segments)
             media_type = "text/plain"
     elif kind == "notes":
-        analysis = db.query(models.MeetingAnalysis).filter(models.MeetingAnalysis.meeting_id == meeting_id).first()
-        action_items = (
-            db.query(models.ActionItem).filter(models.ActionItem.meeting_id == meeting_id).all()
+        analysis = (
+            db.query(models.MeetingAnalysis).filter(models.MeetingAnalysis.meeting_id == meeting_id).first()
         )
+        action_items = db.query(models.ActionItem).filter(models.ActionItem.meeting_id == meeting_id).all()
         content = export_service.notes_to_markdown(meeting, analysis, action_items)
         media_type = "text/markdown"
     else:
@@ -257,6 +268,7 @@ def export_meeting(meeting_id: str, kind: str = "transcript", fmt: str = "txt", 
 
 
 # --- Action items ---
+
 
 @router.get("/{meeting_id}/action-items", response_model=list[schemas.ActionItemOut])
 def list_action_items(meeting_id: str, db: Session = Depends(get_db)):
@@ -287,7 +299,9 @@ def create_action_item(meeting_id: str, payload: schemas.ActionItemCreate, db: S
 
 
 @router.patch("/{meeting_id}/action-items/{item_id}", response_model=schemas.ActionItemOut)
-def update_action_item(meeting_id: str, item_id: str, payload: schemas.ActionItemUpdate, db: Session = Depends(get_db)):
+def update_action_item(
+    meeting_id: str, item_id: str, payload: schemas.ActionItemUpdate, db: Session = Depends(get_db)
+):
     item = (
         db.query(models.ActionItem)
         .filter(models.ActionItem.id == item_id, models.ActionItem.meeting_id == meeting_id)
@@ -321,6 +335,7 @@ def delete_action_item(meeting_id: str, item_id: str, db: Session = Depends(get_
 
 
 # --- Q&A ---
+
 
 @router.post("/{meeting_id}/questions", response_model=schemas.QuestionOut, status_code=201)
 def ask_question(meeting_id: str, payload: schemas.QuestionCreate, db: Session = Depends(get_db)):
