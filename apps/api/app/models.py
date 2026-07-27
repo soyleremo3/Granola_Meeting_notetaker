@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
+from app.database import Base, UTCDateTime
 
 
 def _uuid() -> str:
@@ -34,8 +34,8 @@ class Meeting(Base):
 
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now, onupdate=_now)
 
     segments: Mapped[list["TranscriptSegment"]] = relationship(
         back_populates="meeting", cascade="all, delete-orphan", order_by="TranscriptSegment.start_time"
@@ -81,8 +81,8 @@ class MeetingAnalysis(Base):
     source: Mapped[str] = mapped_column(String, default="fallback")  # openrouter | fallback
     model_name: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now, onupdate=_now)
 
     meeting: Mapped["Meeting"] = relationship(back_populates="analysis")
 
@@ -102,8 +102,8 @@ class ActionItem(Base):
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[str] = mapped_column(String, default="ai")  # ai | manual
 
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now, onupdate=_now)
 
     meeting: Mapped["Meeting"] = relationship(back_populates="action_items")
 
@@ -121,6 +121,6 @@ class MeetingQuestion(Base):
     source: Mapped[str] = mapped_column(String, default="fallback")  # openrouter | fallback
     chat_session_id: Mapped[str] = mapped_column(String, default=_uuid)
 
-    created_at: Mapped[datetime] = mapped_column(default=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     meeting: Mapped["Meeting"] = relationship(back_populates="questions")

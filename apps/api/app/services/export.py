@@ -17,7 +17,9 @@ def notes_to_markdown(
     action_items: list[models.ActionItem],
 ) -> str:
     lines = [f"# {meeting.title}", ""]
-    lines.append(f"_Oluşturulma tarihi: {meeting.created_at:%d.%m.%Y %H:%M}_")
+    # Rendered server-side as static text, so the timestamp is labeled UTC explicitly —
+    # unlike the web UI, an exported file can't be converted to the reader's local time.
+    lines.append(f"_Oluşturulma tarihi: {meeting.created_at:%d.%m.%Y %H:%M} UTC_")
     lines.append("")
 
     if analysis and analysis.summary:
