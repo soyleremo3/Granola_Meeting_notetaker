@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Env files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+apps/api/data/
+
+# Media / generated content (never commit meeting recordings)
+apps/api/storage/recordings/**
+!apps/api/storage/recordings/.gitkeep
+apps/api/storage/uploads/**
+!apps/api/storage/uploads/.gitkeep
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.webm
+*.ogg
+
+# Whisper models
+apps/api/models/
+*.bin
+*.ct2
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code session state (not project config)
+.claude/scheduled_tasks.lock
+
+# Coverage
+coverage/
+.coverage
+htmlcov/

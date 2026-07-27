@@ -1,0 +1,18 @@
+{
+  "name": "granola-tr",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local-first Turkish AI meeting assistant",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev:api": "node -e \"process.exit(0)\" && echo use scripts/dev.mjs or apps/api Makefile",
+    "seed:demo": "node scripts/seed-demo.mjs seed",
+    "clear:demo": "node scripts/seed-demo.mjs clear",
+    "lint:web": "npm --prefix apps/web run lint",
+    "typecheck:web": "npm --prefix apps/web exec tsc -- --noEmit",
+    "build:web": "npm --prefix apps/web run build",
+    "test:web": "npm --prefix apps/web run test"
+  }
+}
