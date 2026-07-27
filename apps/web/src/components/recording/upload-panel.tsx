@@ -58,7 +58,12 @@ export function UploadPanel({
             <p className="text-sm text-muted-foreground">{formatBytes(selectedFile.size)}</p>
           </div>
           {uploadProgress === null && (
-            <Button variant="ghost" size="icon" onClick={() => onFileSelected(null)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onFileSelected(null)}
+              aria-label="Seçili dosyayı kaldır"
+            >
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -76,6 +81,9 @@ export function UploadPanel({
   return (
     <div className="flex flex-col gap-3">
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Ses veya video dosyası seçmek için tıklayın ya da sürükleyip bırakın"
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragging(true);
@@ -83,8 +91,14 @@ export function UploadPanel({
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         className={cn(
-          "flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors",
+          "flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           isDragging ? "border-primary bg-accent" : "border-muted-foreground/25 hover:border-primary/40"
         )}
       >

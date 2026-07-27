@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, MessageCircleQuestion, RotateCcw, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/empty-state";
 import { formatTimestamp } from "@/lib/format";
 import { api, ApiError } from "@/lib/api";
@@ -159,15 +159,24 @@ export function QaTab({ meetingId, hasTranscript }: { meetingId: string; hasTran
           e.preventDefault();
           ask(input);
         }}
-        className={cn("flex gap-2")}
+        className={cn("flex items-end gap-2")}
       >
-        <Input
+        <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Toplantı hakkında bir soru sorun..."
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              ask(input);
+            }
+          }}
+          placeholder="Toplantı hakkında bir soru sorun... (Enter: gönder, Shift+Enter: yeni satır)"
+          rows={1}
           disabled={asking}
+          aria-label="Toplantı hakkında soru"
+          className="max-h-32"
         />
-        <Button type="submit" disabled={asking || !input.trim()}>
+        <Button type="submit" disabled={asking || !input.trim()} aria-label="Soruyu gönder">
           {asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </form>

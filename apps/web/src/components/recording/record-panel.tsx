@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Circle, Mic, MonitorUp, Pause, Play, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type RecordingMode = "screen" | "microphone";
@@ -37,6 +45,7 @@ export function RecordPanel({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [noSystemAudio, setNoSystemAudio] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -151,7 +160,7 @@ export function RecordPanel({
     setState("stopped");
   }
 
-  function cancelRecording() {
+  function confirmCancelRecording() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.onstop = null;
@@ -161,6 +170,7 @@ export function RecordPanel({
     chunksRef.current = [];
     setElapsedMs(0);
     setState("idle");
+    setCancelConfirmOpen(false);
   }
 
   const isActive = state === "recording" || state === "paused";
@@ -273,7 +283,7 @@ export function RecordPanel({
                 <Square className="h-4 w-4" />
                 Durdur
               </Button>
-              <Button size="lg" variant="ghost" onClick={cancelRecording}>
+              <Button size="lg" variant="ghost" onClick={() => setCancelConfirmOpen(true)}>
                 <X className="h-4 w-4" />
                 İptal
               </Button>
@@ -289,7 +299,7 @@ export function RecordPanel({
                 <Square className="h-4 w-4" />
                 Durdur
               </Button>
-              <Button size="lg" variant="ghost" onClick={cancelRecording}>
+              <Button size="lg" variant="ghost" onClick={() => setCancelConfirmOpen(true)}>
                 <X className="h-4 w-4" />
                 İptal
               </Button>
@@ -297,6 +307,26 @@ export function RecordPanel({
           )}
         </div>
       </div>
+
+      <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kaydı iptal et</DialogTitle>
+            <DialogDescription>
+              Şu ana kadar kaydedilen ses ({formatElapsed(elapsedMs)}) kalıcı olarak silinecek ve
+              kaydedilmeyecek. Bu işlem geri alınamaz.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelConfirmOpen(false)}>
+              Kayda Devam Et
+            </Button>
+            <Button variant="destructive" onClick={confirmCancelRecording}>
+              Evet, İptal Et
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

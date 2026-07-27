@@ -86,7 +86,7 @@ export function MeetingList({
               <SelectItem value="all">Tüm Durumlar</SelectItem>
               <SelectItem value="ready">Hazır</SelectItem>
               <SelectItem value="processing">İşleniyor</SelectItem>
-              <SelectItem value="error">Hata</SelectItem>
+              <SelectItem value="error">Başarısız</SelectItem>
             </SelectContent>
           </Select>
         </div>

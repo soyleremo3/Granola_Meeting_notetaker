@@ -62,10 +62,10 @@ export function SummaryTab({ analysis }: { analysis: MeetingAnalysis | null }) {
 
       <Section icon={<ListChecks className="h-4 w-4" />} title="Ana Konular" items={analysis.topics} />
       <Section icon={<ListTodo className="h-4 w-4" />} title="Kararlar" items={analysis.decisions} />
-      <Section icon={<ShieldAlert className="h-4 w-4" />} title="Riskler / Belirsizlikler" items={analysis.risks} />
+      <Section icon={<ShieldAlert className="h-4 w-4" />} title="Riskler" items={analysis.risks} />
       <Section
         icon={<CircleHelp className="h-4 w-4" />}
-        title="Cevaplanmamış Sorular"
+        title="Çözümlenmemiş Sorular"
         items={analysis.unresolved_questions}
       />
       <Section icon={<Sparkles className="h-4 w-4" />} title="Takip Edilecekler" items={analysis.follow_ups} />

@@ -4,10 +4,10 @@ import type { MeetingStatus } from "@/lib/types";
 
 const STATUS_CONFIG: Record<MeetingStatus, { label: string; className: string }> = {
   uploaded: { label: "Yüklendi", className: "bg-muted text-muted-foreground" },
-  processing: { label: "İşleniyor", className: "bg-accent text-accent-foreground animate-pulse" },
+  processing: { label: "İşleniyor", className: "bg-accent text-accent-foreground motion-safe:animate-pulse" },
   transcribed: { label: "Döküm Hazır", className: "bg-accent text-accent-foreground" },
   ready: { label: "Hazır", className: "bg-primary/15 text-primary" },
-  error: { label: "Hata", className: "bg-destructive/15 text-destructive" },
+  error: { label: "Başarısız", className: "bg-destructive/15 text-destructive" },
 };
 
 export function StatusBadge({ status, className }: { status: MeetingStatus; className?: string }) {

@@ -29,7 +29,7 @@ export function ProcessingOverlay({ status }: { status: ProcessingStatus }) {
 
       <ul className="flex w-full flex-col gap-2 text-left">
         {STAGES.map((stage, idx) => {
-          const isDone = currentIndex > idx || currentIndex === -1;
+          const isDone = currentIndex !== -1 && currentIndex > idx;
           const isCurrent = idx === currentIndex;
           return (
             <li

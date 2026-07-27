@@ -110,7 +110,13 @@ export function MeetingHeader({
                 className="text-xl font-semibold"
                 disabled={saving}
               />
-              <Button size="icon" variant="ghost" onClick={saveTitle} disabled={saving}>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={saveTitle}
+                disabled={saving}
+                aria-label="Başlığı kaydet"
+              >
                 <Check className="h-4 w-4" />
               </Button>
               <Button
@@ -121,6 +127,7 @@ export function MeetingHeader({
                   setEditing(false);
                 }}
                 disabled={saving}
+                aria-label="Başlık düzenlemeyi iptal et"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -128,6 +135,7 @@ export function MeetingHeader({
           ) : (
             <button
               onClick={() => setEditing(true)}
+              aria-label={`Başlığı düzenle: ${meeting.title}`}
               className="group flex items-center gap-2 text-left text-2xl font-semibold tracking-tight"
             >
               <span className="truncate">{meeting.title}</span>

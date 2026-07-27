@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { NotebookPen, Plus } from "lucide-react";
+import { ListChecks, NotebookPen, Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,14 +16,16 @@ export function AppHeader() {
           <span className="text-base sm:text-lg">Not Defteri</span>
         </Link>
 
-        <nav className="flex items-center gap-2">
+        <nav aria-label="Ana gezinme" className="flex items-center gap-2">
           <Link
             href="/meetings"
-            className={cn(buttonVariants({ variant: "ghost" }), "hidden sm:inline-flex")}
+            aria-label="Toplantılar"
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "sm:h-9 sm:px-4")}
           >
-            Toplantılar
+            <ListChecks className="h-4 w-4 sm:hidden" />
+            <span className="hidden sm:inline">Toplantılar</span>
           </Link>
-          <Link href="/new" className={buttonVariants()}>
+          <Link href="/new" className={cn(buttonVariants({ size: "sm" }), "sm:h-9 sm:px-4")}>
             <Plus className="h-4 w-4" />
             Yeni Toplantı
           </Link>

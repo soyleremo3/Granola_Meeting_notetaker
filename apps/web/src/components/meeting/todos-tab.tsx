@@ -141,13 +141,14 @@ export function TodosTab({
         </Button>
       </div>
 
-      <div className="flex gap-1">
+      <div className="flex gap-1" role="group" aria-label="Görevleri filtrele">
         {(["all", "open", "completed"] as const).map((key) => (
           <button
             key={key}
             onClick={() => setFilter(key)}
+            aria-pressed={filter === key}
             className={cn(
-              "rounded-full px-3 py-1 text-sm transition-colors",
+              "rounded-full px-3 py-1 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               filter === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
             )}
           >
@@ -179,6 +180,11 @@ export function TodosTab({
                   onCheckedChange={() => toggleComplete(item)}
                   className="mt-0.5"
                   disabled={isEditing}
+                  aria-label={
+                    item.is_completed
+                      ? `"${item.description}" görevini yeniden aç`
+                      : `"${item.description}" görevini tamamlandı işaretle`
+                  }
                 />
                 <div className="min-w-0 flex-1">
                   {isEditing && draft ? (
@@ -248,7 +254,13 @@ export function TodosTab({
                 <div className="flex shrink-0 items-center gap-1">
                   {isEditing ? (
                     <>
-                      <Button variant="ghost" size="icon" onClick={() => saveEdit(item)} disabled={saving}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => saveEdit(item)}
+                        disabled={saving}
+                        aria-label="Değişiklikleri kaydet"
+                      >
                         <Check className="h-4 w-4" />
                       </Button>
                       <Button
@@ -259,16 +271,27 @@ export function TodosTab({
                           setDraft(null);
                         }}
                         disabled={saving}
+                        aria-label="Düzenlemeyi iptal et"
                       >
                         <X className="h-4 w-4" />
                       </Button>
                     </>
                   ) : (
                     <>
-                      <Button variant="ghost" size="icon" onClick={() => startEdit(item)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => startEdit(item)}
+                        aria-label={`"${item.description}" görevini düzenle`}
+                      >
                         <Pencil className="h-4 w-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteItem(item)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteItem(item)}
+                        aria-label={`"${item.description}" görevini sil`}
+                      >
                         <Trash2 className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </>
