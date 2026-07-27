@@ -13,8 +13,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import {
+  BROWSER_UNSUPPORTED_MESSAGE,
+  getMediaStartErrorMessage,
+  isMediaApiSupported,
+  SYSTEM_AUDIO_UNAVAILABLE_MESSAGE,
+  type RecordingMode,
+} from "@/lib/media-errors";
 
-type RecordingMode = "screen" | "microphone";
 type RecordingState = "idle" | "requesting" | "recording" | "paused" | "stopped";
 
 function pickMimeType(): string {
@@ -82,8 +88,18 @@ export function RecordPanel({
   }
 
   async function startRecording() {
+    // Guard against duplicate attempts while a previous request is already in flight
+    // (e.g. the browser's share picker is still open).
+    if (state !== "idle") return;
+
     setError(null);
     setNoSystemAudio(false);
+
+    if (!isMediaApiSupported(mode, typeof navigator !== "undefined" ? navigator.mediaDevices : undefined)) {
+      setError(BROWSER_UNSUPPORTED_MESSAGE);
+      return;
+    }
+
     setState("requesting");
 
     try {
@@ -127,15 +143,7 @@ export function RecordPanel({
       setState("recording");
     } catch (err) {
       setState("idle");
-      if (err instanceof DOMException && err.name === "NotAllowedError") {
-        setError(
-          mode === "screen"
-            ? "Ekran/sekme paylaşımı izni reddedildi. Kayda başlamak için izin vermeniz gerekir."
-            : "Mikrofon izni reddedildi. Kayda başlamak için izin vermeniz gerekir."
-        );
-      } else {
-        setError("Kayıt başlatılamadı. Tarayıcınız bu özelliği desteklemiyor olabilir.");
-      }
+      setError(getMediaStartErrorMessage(err, mode));
     }
   }
 
@@ -192,6 +200,10 @@ export function RecordPanel({
             <span className="text-sm text-muted-foreground">
               Google Meet veya Zoom sekmesini/penceresini paylaşın, toplantı sesini yakalar.
             </span>
+            <span className="text-xs text-muted-foreground">
+              Açılan pencerede Chrome Sekmesi&apos;ni seçin ve &quot;Sekme sesini paylaş&quot;
+              kutusunu işaretleyin.
+            </span>
           </button>
           <button
             type="button"
@@ -234,10 +246,7 @@ export function RecordPanel({
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Sistem sesi algılanmadı</AlertTitle>
-          <AlertDescription>
-            Tarayıcınız veya işletim sisteminiz sekme/sistem sesi paylaşımını desteklemiyor
-            olabilir. Kayıt yalnızca görüntü içerebilir; en iyi sonuç için mikrofon modunu deneyin.
-          </AlertDescription>
+          <AlertDescription>{SYSTEM_AUDIO_UNAVAILABLE_MESSAGE}</AlertDescription>
         </Alert>
       )}
 
