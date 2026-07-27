@@ -14,9 +14,44 @@ from app.config import settings
 from app.services.analysis import _call_openrouter, _format_ts
 
 _STOPWORDS = {
-    "ve", "bir", "bu", "şu", "o", "ile", "de", "da", "için", "gibi", "ama", "fakat",
-    "çok", "daha", "en", "ki", "mi", "mı", "mu", "mü", "ne", "her", "ya", "veya",
-    "mısınız", "misiniz", "nedir", "nasıl", "kim", "hangi",
+    "ve",
+    "bir",
+    "bu",
+    "şu",
+    "o",
+    "ile",
+    "de",
+    "da",
+    "için",
+    "gibi",
+    "ama",
+    "fakat",
+    "çok",
+    "daha",
+    "en",
+    "ki",
+    "mi",
+    "mı",
+    "mu",
+    "mü",
+    "ne",
+    "her",
+    "ya",
+    "veya",
+    "mısınız",
+    "misiniz",
+    "nedir",
+    "nasıl",
+    "kim",
+    "hangi",
+    # High-frequency existential/generic words: matching only on these produces
+    # false "grounded" answers for questions unrelated to the transcript content.
+    "var",
+    "yok",
+    "olan",
+    "olur",
+    "oldu",
+    "değil",
 }
 
 NO_EVIDENCE_ANSWER = "Bu bilgi toplantı içeriğinde bulunmuyor."
@@ -82,7 +117,14 @@ def retrieve_relevant_chunks(segments: list, question: str, top_k: int = 5) -> l
             tf = term_freq[term]
             score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / avg_len))
         if score > 0:
-            scored.append(RetrievedChunk(text=chunk["text"], start_time=chunk["start_time"], end_time=chunk["end_time"], score=score))
+            scored.append(
+                RetrievedChunk(
+                    text=chunk["text"],
+                    start_time=chunk["start_time"],
+                    end_time=chunk["end_time"],
+                    score=score,
+                )
+            )
 
     scored.sort(key=lambda c: c.score, reverse=True)
     return scored[:top_k]
@@ -114,7 +156,5 @@ def answer_question(segments: list, question: str) -> tuple[str, list[float], bo
 
     # Local fallback: return the best matching excerpt verbatim, clearly labeled.
     best = chunks[0]
-    answer = (
-        f"(Yerel arama sonucu) İlgili bölüm [{_format_ts(best.start_time)}]: \"{best.text.strip()}\""
-    )
+    answer = f'(Yerel arama sonucu) İlgili bölüm [{_format_ts(best.start_time)}]: "{best.text.strip()}"'
     return answer, [c.start_time for c in chunks], True, "fallback", None
