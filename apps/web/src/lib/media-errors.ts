@@ -12,8 +12,9 @@ export const NO_VIDEO_TRACK_MESSAGE =
   "Paylaşılan kaynaktan görüntü alınamadı. Lütfen bir ekran, pencere veya Chrome sekmesi seçin.";
 
 export const SYSTEM_AUDIO_UNAVAILABLE_MESSAGE =
-  "Kayıt başladı ancak paylaşılan kaynaktan ses alınamadı. Toplantı sesini kaydetmek için Chrome " +
-  "Sekmesi'ni seçip 'Sekme sesini paylaş' seçeneğini etkinleştirin.";
+  "Kayıt başladı ancak paylaşılan kaynaktan ses alınamadı. Görüntü kaydı yine de tamamlanacak, " +
+  "ancak konuşma metnine (transkript) dönüştürme için ses gereklidir. Toplantı sesini kaydetmek " +
+  "için Chrome Sekmesi'ni seçip 'Sekme sesini paylaş' seçeneğini etkinleştirin.";
 
 export const BROWSER_UNSUPPORTED_MESSAGE =
   "Tarayıcınız ekran veya mikrofon kaydını desteklemiyor. Güncel bir Chrome veya Edge tarayıcısı kullanmayı deneyin.";

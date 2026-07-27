@@ -9,9 +9,22 @@ from app.config import settings
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".mp4", ".webm", ".ogg"}
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
+NO_AUDIO_STREAM_MESSAGE = (
+    "Bu kayıtta ses kanalı bulunamadı. Chrome Sekmesi'ni seçip 'Sekme sesini paylaş' seçeneğini "
+    "etkinleştirin veya Yalnızca Mikrofon kaydını kullanın."
+)
+
 
 class UnsupportedFileError(Exception):
     pass
+
+
+class NoAudioStreamError(Exception):
+    """Raised when the source media (e.g. a video-only screen recording) has no audio stream.
+
+    Transcription is impossible without audio, so the pipeline must stop here with a friendly
+    message rather than let ffmpeg fail conversion with a raw "does not contain any stream" error.
+    """
 
 
 def sanitize_filename(filename: str) -> str:
@@ -71,8 +84,36 @@ def save_recording_bytes(data: bytes, meeting_id: str, ext: str = ".webm") -> Pa
     return dest
 
 
+def has_audio_stream(path: Path) -> bool:
+    """True if ffprobe reports at least one audio stream in the given media file."""
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "a",
+        "-show_entries",
+        "stream=index",
+        "-of",
+        "csv=p=0",
+        str(path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg bulunamadı. Lütfen FFmpeg'i kurun ve PATH içine ekleyin.") from exc
+    return bool(result.stdout.strip())
+
+
 def convert_to_wav(source_path: Path, meeting_id: str) -> Path:
-    """Convert any supported media file to 16kHz mono WAV for transcription."""
+    """Convert any supported media file to 16kHz mono WAV for transcription.
+
+    Raises NoAudioStreamError up front (before invoking ffmpeg) when the source has no audio
+    stream at all, e.g. a screen recording captured without "share tab audio" enabled.
+    """
+    if not has_audio_stream(source_path):
+        raise NoAudioStreamError(NO_AUDIO_STREAM_MESSAGE)
+
     dest = settings.storage_path / "processed" / f"{meeting_id}.wav"
     dest.parent.mkdir(parents=True, exist_ok=True)
 

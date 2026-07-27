@@ -3,6 +3,7 @@ from pathlib import Path
 from app import models
 from app.database import SessionLocal
 from app.services import pipeline, storage, transcription
+from app.services.storage import NO_AUDIO_STREAM_MESSAGE, NoAudioStreamError
 from app.services.transcription import NoSpeechDetectedError
 
 
@@ -46,6 +47,32 @@ def test_pipeline_surfaces_clear_error_when_no_speech_detected(client, monkeypat
             db.query(models.MeetingAnalysis).filter(models.MeetingAnalysis.meeting_id == meeting_id).first()
         )
         assert analysis_row is None
+    finally:
+        db.close()
+
+
+def test_pipeline_surfaces_friendly_message_for_video_only_recording(client, monkeypatch):
+    meeting_id = _create_meeting_with_media(client)
+
+    def _raise_no_audio(*args, **kwargs):
+        raise NoAudioStreamError(NO_AUDIO_STREAM_MESSAGE)
+
+    monkeypatch.setattr(storage, "convert_to_wav", _raise_no_audio)
+
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("Whisper must not run when the source has no audio stream")
+
+    monkeypatch.setattr(transcription, "transcribe_audio", _fail_if_called)
+
+    pipeline.run_full_pipeline(meeting_id, str(Path("fake_source.webm")))
+
+    db = SessionLocal()
+    try:
+        meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
+        assert meeting.status == "error"
+        assert meeting.error_message == NO_AUDIO_STREAM_MESSAGE
+        assert "does not contain any stream" not in meeting.error_message
+        assert "ffmpeg" not in meeting.error_message.lower()
     finally:
         db.close()
 
