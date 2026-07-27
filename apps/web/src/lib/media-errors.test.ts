@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   BROWSER_UNSUPPORTED_MESSAGE,
+  MEDIARECORDER_START_FAILURE_MESSAGE,
+  MEDIARECORDER_UNSUPPORTED_MESSAGE,
   MIC_PERMISSION_DENIED_MESSAGE,
+  NO_VIDEO_TRACK_MESSAGE,
   SCREEN_SHARE_CANCELLED_MESSAGE,
   getMediaStartErrorMessage,
   isMediaApiSupported,
 } from "./media-errors";
+import { NoVideoTrackError, RecorderStartError, RecorderUnsupportedError } from "./media-recorder";
 
 // Never invoked; only its presence/type is checked by isMediaApiSupported.
 const fakeMediaMethod = async () => ({}) as MediaStream;
@@ -26,6 +30,21 @@ describe("getMediaStartErrorMessage", () => {
     expect(message).not.toBe(BROWSER_UNSUPPORTED_MESSAGE);
     expect(message).not.toBe(SCREEN_SHARE_CANCELLED_MESSAGE);
     expect(message).not.toBe(MIC_PERMISSION_DENIED_MESSAGE);
+  });
+
+  it("reports a missing video track distinctly from a cancelled picker", () => {
+    expect(getMediaStartErrorMessage(new NoVideoTrackError(), "screen")).toBe(NO_VIDEO_TRACK_MESSAGE);
+  });
+
+  it("reports MediaRecorder being wholly unsupported", () => {
+    expect(getMediaStartErrorMessage(new RecorderUnsupportedError(), "screen")).toBe(
+      MEDIARECORDER_UNSUPPORTED_MESSAGE
+    );
+  });
+
+  it("reports a MediaRecorder construction/start failure distinctly from an unsupported browser", () => {
+    const err = new RecorderStartError(new DOMException("mime not supported", "NotSupportedError"));
+    expect(getMediaStartErrorMessage(err, "screen")).toBe(MEDIARECORDER_START_FAILURE_MESSAGE);
   });
 });
 

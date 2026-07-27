@@ -17,19 +17,23 @@ import {
   BROWSER_UNSUPPORTED_MESSAGE,
   getMediaStartErrorMessage,
   isMediaApiSupported,
+  SHARING_ENDED_MESSAGE,
   SYSTEM_AUDIO_UNAVAILABLE_MESSAGE,
   type RecordingMode,
 } from "@/lib/media-errors";
+import {
+  collectChunk,
+  countTracks,
+  createRecorder,
+  mimeCandidatesForMode,
+  NoVideoTrackError,
+  pickSupportedMimeType,
+  RecorderUnsupportedError,
+  shouldStopRecorder,
+  startRecorder,
+} from "@/lib/media-recorder";
 
 type RecordingState = "idle" | "requesting" | "recording" | "paused" | "stopped";
-
-function pickMimeType(): string {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
-  for (const type of candidates) {
-    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) return type;
-  }
-  return "";
-}
 
 function formatElapsed(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -51,6 +55,7 @@ export function RecordPanel({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [noSystemAudio, setNoSystemAudio] = useState(false);
+  const [sharingEndedNotice, setSharingEndedNotice] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
@@ -59,9 +64,13 @@ export function RecordPanel({
   const startRef = useRef<number>(0);
   const pausedAccumRef = useRef<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionIdRef = useRef(0);
+  const trackEndedListenerRef = useRef<{ track: MediaStreamTrack; handler: () => void } | null>(null);
 
   useEffect(() => {
     return () => {
+      sessionIdRef.current += 1;
+      removeTrackEndedListener();
       stopAllTracks();
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -83,6 +92,14 @@ export function RecordPanel({
     streamRef.current = null;
   }
 
+  function removeTrackEndedListener() {
+    const entry = trackEndedListenerRef.current;
+    if (entry) {
+      entry.track.removeEventListener("ended", entry.handler);
+      trackEndedListenerRef.current = null;
+    }
+  }
+
   function tick() {
     setElapsedMs(Date.now() - startRef.current + pausedAccumRef.current);
   }
@@ -94,6 +111,12 @@ export function RecordPanel({
 
     setError(null);
     setNoSystemAudio(false);
+    setSharingEndedNotice(false);
+
+    if (typeof MediaRecorder === "undefined") {
+      setError(getMediaStartErrorMessage(new RecorderUnsupportedError(), mode));
+      return;
+    }
 
     if (!isMediaApiSupported(mode, typeof navigator !== "undefined" ? navigator.mediaDevices : undefined)) {
       setError(BROWSER_UNSUPPORTED_MESSAGE);
@@ -101,21 +124,29 @@ export function RecordPanel({
     }
 
     setState("requesting");
+    const sessionId = ++sessionIdRef.current;
 
     try {
       let stream: MediaStream;
 
       if (mode === "screen") {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-        if (stream.getAudioTracks().length === 0) {
-          setNoSystemAudio(true);
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+
+        const { video, audio } = countTracks(stream);
+        if (video === 0) {
+          stream.getTracks().forEach((t) => t.stop());
+          throw new NoVideoTrackError();
         }
-        stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+        if (audio === 0) setNoSystemAudio(true);
+
+        const videoTrack = stream.getVideoTracks()[0];
+        const handler = () => {
+          if (sessionIdRef.current !== sessionId) return; // stale listener from a prior attempt
+          setSharingEndedNotice(true);
           stopRecording();
-        });
+        };
+        videoTrack.addEventListener("ended", handler);
+        trackEndedListenerRef.current = { track: videoTrack, handler };
       } else {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
@@ -123,18 +154,22 @@ export function RecordPanel({
       streamRef.current = stream;
       chunksRef.current = [];
 
-      const mimeType = pickMimeType();
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const mimeType = pickSupportedMimeType(mimeCandidatesForMode(mode));
+      const recorder = createRecorder(stream, mimeType);
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        collectChunk(chunksRef.current, e.data);
+      };
+      recorder.onerror = (e) => {
+        console.error("MediaRecorder error", (e as { error?: DOMException }).error ?? e);
       };
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType || "audio/webm" });
+        const fallbackType = mode === "screen" ? "video/webm" : "audio/webm";
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || fallbackType });
         onFinished(blob, mode);
       };
 
       recorderRef.current = recorder;
-      recorder.start(1000);
+      startRecorder(recorder, 1000);
 
       startRef.current = Date.now();
       pausedAccumRef.current = 0;
@@ -142,6 +177,8 @@ export function RecordPanel({
       intervalRef.current = setInterval(tick, 500);
       setState("recording");
     } catch (err) {
+      removeTrackEndedListener();
+      stopAllTracks();
       setState("idle");
       setError(getMediaStartErrorMessage(err, mode));
     }
@@ -162,21 +199,30 @@ export function RecordPanel({
   }
 
   function stopRecording() {
+    // Check the recorder's own live state, not the React `state` variable: this function
+    // is also invoked from a track "ended" listener closure created once at recording start,
+    // which would otherwise always see the stale "idle" snapshot from that render.
+    const recorder = recorderRef.current;
+    if (!shouldStopRecorder(recorder)) return; // already stopped/stopping
     if (intervalRef.current) clearInterval(intervalRef.current);
-    recorderRef.current?.stop();
+    removeTrackEndedListener();
+    recorder?.stop();
     stopAllTracks();
     setState("stopped");
   }
 
   function confirmCancelRecording() {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    if (recorderRef.current && recorderRef.current.state !== "inactive") {
-      recorderRef.current.onstop = null;
-      recorderRef.current.stop();
+    removeTrackEndedListener();
+    const recorder = recorderRef.current;
+    if (shouldStopRecorder(recorder) && recorder) {
+      recorder.onstop = null;
+      recorder.stop();
     }
     stopAllTracks();
     chunksRef.current = [];
     setElapsedMs(0);
+    setSharingEndedNotice(false);
     setState("idle");
     setCancelConfirmOpen(false);
   }
@@ -247,6 +293,14 @@ export function RecordPanel({
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Sistem sesi algılanmadı</AlertTitle>
           <AlertDescription>{SYSTEM_AUDIO_UNAVAILABLE_MESSAGE}</AlertDescription>
+        </Alert>
+      )}
+
+      {sharingEndedNotice && state === "stopped" && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Paylaşım sona erdi</AlertTitle>
+          <AlertDescription>{SHARING_ENDED_MESSAGE}</AlertDescription>
         </Alert>
       )}
 

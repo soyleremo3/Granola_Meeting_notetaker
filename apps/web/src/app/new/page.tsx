@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordPanel } from "@/components/recording/record-panel";
 import { UploadPanel } from "@/components/recording/upload-panel";
 import { api, ApiError } from "@/lib/api";
+import type { RecordingMode } from "@/lib/media-errors";
 
 function NewMeetingContent() {
   const router = useRouter();
@@ -49,8 +50,9 @@ function NewMeetingContent() {
     }
   }
 
-  function handleRecordingFinished(blob: Blob) {
-    const file = new File([blob], `kayit-${Date.now()}.webm`, { type: blob.type || "audio/webm" });
+  function handleRecordingFinished(blob: Blob, mode: RecordingMode) {
+    const fallbackType = mode === "screen" ? "video/webm" : "audio/webm";
+    const file = new File([blob], `kayit-${Date.now()}.webm`, { type: blob.type || fallbackType });
     void submitMedia(file, "recording");
   }
 
