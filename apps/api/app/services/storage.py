@@ -91,9 +91,7 @@ def convert_to_wav(source_path: Path, meeting_id: str) -> Path:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     except FileNotFoundError as exc:
-        raise RuntimeError(
-            "ffmpeg bulunamadı. Lütfen FFmpeg'i kurun ve PATH içine ekleyin."
-        ) from exc
+        raise RuntimeError("ffmpeg bulunamadı. Lütfen FFmpeg'i kurun ve PATH içine ekleyin.") from exc
 
     if result.returncode != 0:
         raise RuntimeError(f"Ses dönüştürme başarısız oldu: {result.stderr[-500:]}")

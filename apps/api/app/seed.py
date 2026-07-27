@@ -13,15 +13,27 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 DEMO_SEGMENTS = [
     (0.0, 6.0, "Merhaba arkadaşlar, bugünkü haftalık ürün toplantımıza hoş geldiniz."),
     (6.0, 14.0, "Geçen hafta konuştuğumuz mobil uygulama performans sorununu konuşarak başlayalım."),
-    (14.0, 24.0, "Performans testlerinde ana sayfa açılış süresinin üç saniyeye kadar çıktığını gördük, bu bir risk oluşturuyor."),
+    (
+        14.0,
+        24.0,
+        "Performans testlerinde ana sayfa açılış süresinin üç saniyeye kadar çıktığını gördük, bu bir risk oluşturuyor.",
+    ),
     (24.0, 33.0, "Bu sorunu çözmek için resim boyutlarını küçültmemiz ve önbellekleme eklememiz gerekiyor."),
     (33.0, 40.0, "Ahmet bu görevi bu hafta cuma gününe kadar tamamlamayı kabul etti."),
     (40.0, 48.0, "Karar verildi: yeni sürümde önbellekleme sistemi zorunlu olarak devreye alınacak."),
     (48.0, 58.0, "Ayrıca kullanıcı geri bildirimlerinde bildirim ayarlarının karmaşık olduğu belirtilmiş."),
     (58.0, 66.0, "Bildirim ayarları ekranını basitleştirmek için Elif bir tasarım taslağı hazırlayacak."),
     (66.0, 74.0, "Elif taslağı gelecek salı gününe kadar paylaşacak, tarih üzerinde anlaştık."),
-    (74.0, 82.0, "Bir risk olarak, üçüncü parti bildirim servisinin fiyatlandırması hakkında hâlâ belirsizlik var."),
-    (82.0, 90.0, "Bu konuda satın alma ekibiyle görüşüp görüşmediğimiz henüz netleşmedi, bunu araştırmamız lazım."),
+    (
+        74.0,
+        82.0,
+        "Bir risk olarak, üçüncü parti bildirim servisinin fiyatlandırması hakkında hâlâ belirsizlik var.",
+    ),
+    (
+        82.0,
+        90.0,
+        "Bu konuda satın alma ekibiyle görüşüp görüşmediğimiz henüz netleşmedi, bunu araştırmamız lazım.",
+    ),
     (90.0, 98.0, "Son olarak, önümüzdeki sprint planlamasını gelecek pazartesi yapacağız."),
     (98.0, 104.0, "Herkese katılımı için teşekkür ederim, toplantıyı burada bitiriyoruz."),
 ]
@@ -66,7 +78,11 @@ def seed_demo_data() -> None:
                 meeting_id=meeting.id,
                 summary=DEMO_SUMMARY,
                 topics_json=json.dumps(
-                    ["Mobil uygulama performansı", "Bildirim ayarları kullanılabilirliği", "Sprint planlaması"],
+                    [
+                        "Mobil uygulama performansı",
+                        "Bildirim ayarları kullanılabilirliği",
+                        "Sprint planlaması",
+                    ],
                     ensure_ascii=False,
                 ),
                 decisions_json=json.dumps(

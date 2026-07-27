@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # --- Meeting ---
 
+
 class MeetingCreate(BaseModel):
     title: str = Field(default="Adsız Toplantı", max_length=200)
     source_type: str = Field(default="upload")
@@ -38,6 +39,7 @@ class MeetingDetail(MeetingSummary):
 
 # --- Transcript ---
 
+
 class TranscriptSegmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +52,7 @@ class TranscriptSegmentOut(BaseModel):
 
 
 # --- Analysis ---
+
 
 class MeetingAnalysisOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -91,6 +94,7 @@ class ActionItemListLLM(BaseModel):
 
 # --- Action Items ---
 
+
 class ActionItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,6 +127,7 @@ class ActionItemUpdate(BaseModel):
 
 # --- Q&A ---
 
+
 class QuestionCreate(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     chat_session_id: str | None = None
@@ -142,6 +147,7 @@ class QuestionOut(BaseModel):
 
 
 # --- Processing status ---
+
 
 class ProcessingStatus(BaseModel):
     status: str
