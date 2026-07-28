@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { ALLOWED_MEDIA_EXTENSIONS, MAX_UPLOAD_MB, validateMediaFile } from "@/lib/validation";
+import {
+  ALLOWED_MEDIA_EXTENSIONS,
+  LARGE_FILE_NOTICE,
+  LARGE_FILE_THRESHOLD_MB,
+  validateMediaFile,
+} from "@/lib/validation";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -47,6 +52,7 @@ export function UploadPanel({
   }
 
   if (selectedFile) {
+    const isLarge = selectedFile.size > LARGE_FILE_THRESHOLD_MB * 1024 * 1024;
     return (
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
         <div className="flex items-center gap-3">
@@ -68,6 +74,12 @@ export function UploadPanel({
             </Button>
           )}
         </div>
+        {isLarge && uploadProgress === null && (
+          <Alert>
+            <AlertTitle>Büyük dosya</AlertTitle>
+            <AlertDescription>{LARGE_FILE_NOTICE}</AlertDescription>
+          </Alert>
+        )}
         {uploadProgress !== null && (
           <div className="flex flex-col gap-1">
             <Progress value={uploadProgress} />
@@ -105,9 +117,7 @@ export function UploadPanel({
         <Upload className="h-8 w-8 text-muted-foreground" />
         <div>
           <p className="font-medium">Dosyayı buraya sürükleyin veya seçin</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            MP3, WAV, M4A, MP4, WebM, OGG — maksimum {MAX_UPLOAD_MB} MB
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">MP3, WAV, M4A, MP4, WebM, OGG</p>
         </div>
         <input
           ref={inputRef}

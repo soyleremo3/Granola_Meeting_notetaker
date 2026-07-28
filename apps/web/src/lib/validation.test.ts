@@ -19,7 +19,7 @@ describe("validateMediaFile", () => {
     expect(result.error).toContain("boş");
   });
 
-  it("rejects a file over the size limit", () => {
+  it("rejects a file over a configured size limit", () => {
     const result = validateMediaFile({ name: "meeting.mp4", size: 10 * 1024 * 1024 }, 5);
     expect(result.ok).toBe(false);
     expect(result.error).toContain("Maksimum boyut: 5 MB");
@@ -27,6 +27,21 @@ describe("validateMediaFile", () => {
 
   it("is case-insensitive for extensions", () => {
     const result = validateMediaFile({ name: "MEETING.MP3", size: 1024 });
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts a very large file when no limit is configured (maxSizeMb = 0)", () => {
+    const result = validateMediaFile({ name: "meeting.mp4", size: 20 * 1024 * 1024 * 1024 }, 0);
+    expect(result.ok).toBe(true);
+  });
+
+  it("defaults to unlimited when no maxSizeMb argument is given", () => {
+    const result = validateMediaFile({ name: "meeting.mp4", size: 5 * 1024 * 1024 * 1024 });
+    expect(result.ok).toBe(true);
+  });
+
+  it("still enforces a configured limit when one is set above zero", () => {
+    const result = validateMediaFile({ name: "meeting.mp4", size: 3 * 1024 * 1024 }, 5);
     expect(result.ok).toBe(true);
   });
 });

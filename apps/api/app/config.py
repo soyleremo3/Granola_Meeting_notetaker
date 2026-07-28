@@ -19,11 +19,12 @@ class Settings(BaseSettings):
     whisper_language: str = "tr"
 
     openrouter_api_key: str = ""
-    openrouter_model: str = "meta-llama/llama-3.1-8b-instruct:free"
+    openrouter_model: str = "openrouter/free"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     enable_external_ai: bool = True
 
-    max_upload_mb: int = 500
+    # 0 means "no application-level size limit" (still streamed to disk in chunks).
+    max_upload_size_mb: int = 0
 
     @property
     def storage_path(self) -> Path:

@@ -47,20 +47,25 @@ def validate_upload(file: UploadFile) -> str:
 
 
 def save_upload(file: UploadFile, meeting_id: str, ext: str) -> Path:
+    """Streams the upload to disk in 1MB chunks — the full file is never held in memory.
+
+    `max_upload_size_mb == 0` means no application-level size limit (still streamed,
+    bounded only by available disk space).
+    """
     safe_name = f"{meeting_id}{ext}"
     dest = settings.uploads_path / safe_name
-    max_bytes = settings.max_upload_mb * 1024 * 1024
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024 if settings.max_upload_size_mb > 0 else None
 
     written = 0
     with dest.open("wb") as out:
         while chunk := file.file.read(1024 * 1024):
             written += len(chunk)
-            if written > max_bytes:
+            if max_bytes is not None and written > max_bytes:
                 out.close()
                 dest.unlink(missing_ok=True)
                 raise HTTPException(
                     status_code=413,
-                    detail=f"Dosya çok büyük. Maksimum boyut: {settings.max_upload_mb} MB.",
+                    detail=f"Dosya çok büyük. Maksimum boyut: {settings.max_upload_size_mb} MB.",
                 )
             out.write(chunk)
 
@@ -72,10 +77,10 @@ def save_upload(file: UploadFile, meeting_id: str, ext: str) -> Path:
 
 
 def save_recording_bytes(data: bytes, meeting_id: str, ext: str = ".webm") -> Path:
-    max_bytes = settings.max_upload_mb * 1024 * 1024
-    if len(data) > max_bytes:
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024 if settings.max_upload_size_mb > 0 else None
+    if max_bytes is not None and len(data) > max_bytes:
         raise HTTPException(
-            status_code=413, detail=f"Kayıt çok büyük. Maksimum boyut: {settings.max_upload_mb} MB."
+            status_code=413, detail=f"Kayıt çok büyük. Maksimum boyut: {settings.max_upload_size_mb} MB."
         )
     if len(data) == 0:
         raise HTTPException(status_code=400, detail="Kayıt verisi boş.")
