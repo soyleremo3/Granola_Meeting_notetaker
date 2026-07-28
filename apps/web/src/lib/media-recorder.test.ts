@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   collectChunk,
   countTracks,
   createRecorder,
+  getAudioContextConstructor,
   MIC_MIME_CANDIDATES,
+  mixAudioTracks,
   NoVideoTrackError,
   pickSupportedMimeType,
   RecorderStartError,
@@ -136,5 +138,94 @@ describe("collectChunk", () => {
 describe("RecorderUnsupportedError", () => {
   it("carries a distinguishable name for error-mapping", () => {
     expect(new RecorderUnsupportedError().name).toBe("RecorderUnsupportedError");
+  });
+});
+
+describe("mixAudioTracks", () => {
+  class FakeMediaStream {
+    private tracks: unknown[];
+    constructor(tracks: unknown[] = []) {
+      this.tracks = tracks;
+    }
+    getAudioTracks() {
+      return this.tracks;
+    }
+  }
+
+  beforeEach(() => {
+    // @ts-expect-error - stubbing the global for these tests only; jsdom has no MediaStream
+    globalThis.MediaStream = FakeMediaStream;
+  });
+
+  afterEach(() => {
+    // @ts-expect-error - cleanup the stub
+    delete globalThis.MediaStream;
+  });
+
+  function fakeTrack(id: string): MediaStreamTrack {
+    return { id } as unknown as MediaStreamTrack;
+  }
+
+  function fakeAudioContext() {
+    const connections: unknown[] = [];
+    const destinationTrack = fakeTrack("mixed-output");
+    return {
+      connections,
+      createMediaStreamSource: (stream: MediaStream) => ({
+        connect: (destination: unknown) => connections.push({ stream, destination }),
+      }),
+      createMediaStreamDestination: () => ({
+        stream: new FakeMediaStream([destinationTrack]) as unknown as MediaStream,
+      }),
+    };
+  }
+
+  it("returns null when given no tracks to mix (nothing to capture)", () => {
+    expect(mixAudioTracks(fakeAudioContext(), [])).toBeNull();
+  });
+
+  it("connects every given track into the mix and returns the combined output track", () => {
+    const ctx = fakeAudioContext();
+    const tabAudio = fakeTrack("tab-audio");
+    const micAudio = fakeTrack("mic-audio");
+
+    const result = mixAudioTracks(ctx, [tabAudio, micAudio]);
+
+    expect(result).not.toBeNull();
+    expect(ctx.connections).toHaveLength(2); // both tracks routed into the destination
+  });
+
+  it("mixes a single track too (e.g. tab audio only, no mic)", () => {
+    const ctx = fakeAudioContext();
+    const result = mixAudioTracks(ctx, [fakeTrack("tab-audio")]);
+    expect(result).not.toBeNull();
+    expect(ctx.connections).toHaveLength(1);
+  });
+});
+
+describe("getAudioContextConstructor", () => {
+  afterEach(() => {
+    // @ts-expect-error - cleanup stubs between tests
+    delete globalThis.AudioContext;
+    // @ts-expect-error - cleanup stubs between tests
+    delete globalThis.webkitAudioContext;
+  });
+
+  it("returns undefined when the browser exposes no AudioContext at all", () => {
+    expect(getAudioContextConstructor()).toBeUndefined();
+  });
+
+  it("returns the standard AudioContext constructor when present", () => {
+    class FakeAudioContext {}
+    // @ts-expect-error - stubbing for this test only
+    globalThis.AudioContext = FakeAudioContext;
+    expect(getAudioContextConstructor()).toBe(FakeAudioContext);
+  });
+
+  it("falls back to webkitAudioContext when the standard constructor is absent (older Safari)", () => {
+    class FakeWebkitAudioContext {}
+    // @ts-expect-error - stubbing for this test only
+    globalThis.webkitAudioContext = FakeWebkitAudioContext;
+    expect(getAudioContextConstructor()).toBe(FakeWebkitAudioContext);
   });
 });

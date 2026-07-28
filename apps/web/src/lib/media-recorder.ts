@@ -86,3 +86,41 @@ export function shouldStopRecorder(recorder: Pick<MediaRecorder, "state"> | null
 export function collectChunk(chunks: Blob[], data: Blob): void {
   if (data.size > 0) chunks.push(data);
 }
+
+export interface AudioContextLike {
+  createMediaStreamSource(stream: MediaStream): { connect(destination: unknown): void };
+  createMediaStreamDestination(): { stream: MediaStream };
+}
+
+/**
+ * Mixes any number of audio tracks (e.g. shared-tab audio + microphone) into a single track.
+ *
+ * "Sekme sesini paylaş" only captures sound the shared tab itself plays (e.g. remote
+ * participants in a Meet/Zoom tab) — it never includes the local microphone. A user who shares
+ * their own tab and simply talks into their mic would otherwise get a track that reports as
+ * "present" but is genuine digital silence, so the app never records their voice. Mixing the
+ * microphone in unconditionally fixes that without needing the user to know the distinction.
+ *
+ * Returns null if there is nothing to mix (no tracks given).
+ */
+export function mixAudioTracks(
+  audioContext: AudioContextLike,
+  tracks: MediaStreamTrack[]
+): MediaStreamTrack | null {
+  if (tracks.length === 0) return null;
+  const destination = audioContext.createMediaStreamDestination();
+  for (const track of tracks) {
+    const source = audioContext.createMediaStreamSource(new MediaStream([track]));
+    source.connect(destination);
+  }
+  return destination.stream.getAudioTracks()[0] ?? null;
+}
+
+/** Cross-browser AudioContext constructor lookup (Safari still ships it prefixed). */
+export function getAudioContextConstructor(): typeof AudioContext | undefined {
+  const global = globalThis as unknown as {
+    AudioContext?: typeof AudioContext;
+    webkitAudioContext?: typeof AudioContext;
+  };
+  return global.AudioContext ?? global.webkitAudioContext;
+}

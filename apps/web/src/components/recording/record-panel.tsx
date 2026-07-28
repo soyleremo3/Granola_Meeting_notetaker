@@ -25,7 +25,9 @@ import {
   collectChunk,
   countTracks,
   createRecorder,
+  getAudioContextConstructor,
   mimeCandidatesForMode,
+  mixAudioTracks,
   NoVideoTrackError,
   pickSupportedMimeType,
   RecorderUnsupportedError,
@@ -59,6 +61,11 @@ export function RecordPanel({
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
+  // Screen mode only: the raw microphone stream mixed in alongside shared-tab audio (see
+  // startRecording), and the AudioContext/synthetic track used to mix them.
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mixedTrackRef = useRef<MediaStreamTrack | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startRef = useRef<number>(0);
@@ -90,6 +97,14 @@ export function RecordPanel({
   function stopAllTracks() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
+    micStreamRef.current = null;
+    mixedTrackRef.current?.stop();
+    mixedTrackRef.current = null;
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      void audioContextRef.current.close().catch(() => {});
+    }
+    audioContextRef.current = null;
   }
 
   function removeTrackEndedListener() {
@@ -132,12 +147,11 @@ export function RecordPanel({
       if (mode === "screen") {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
 
-        const { video, audio } = countTracks(stream);
+        const { video } = countTracks(stream);
         if (video === 0) {
           stream.getTracks().forEach((t) => t.stop());
           throw new NoVideoTrackError();
         }
-        if (audio === 0) setNoSystemAudio(true);
 
         const videoTrack = stream.getVideoTracks()[0];
         const handler = () => {
@@ -147,11 +161,49 @@ export function RecordPanel({
         };
         videoTrack.addEventListener("ended", handler);
         trackEndedListenerRef.current = { track: videoTrack, handler };
+
+        // "Sekme sesini paylaş" only captures sound the shared tab itself plays (e.g. remote
+        // participants in a Meet/Zoom tab) — never the local microphone. Mix the mic in too
+        // (best-effort) so the local speaker's voice is always captured, even when narrating
+        // over a tab that plays no sound of its own.
+        let micStream: MediaStream | null = null;
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+          micStream = null; // mic denied/unavailable — fall back to tab audio only
+        }
+        micStreamRef.current = micStream;
+
+        const tabAudioTrack = stream.getAudioTracks()[0] ?? null;
+        const micAudioTrack = micStream?.getAudioTracks()[0] ?? null;
+        const audioTracksToMix = [tabAudioTrack, micAudioTrack].filter(
+          (t): t is MediaStreamTrack => t !== null
+        );
+
+        let recorderAudioTrack: MediaStreamTrack | null = null;
+        const AudioContextCtor = getAudioContextConstructor();
+        if (audioTracksToMix.length > 1 && AudioContextCtor) {
+          const audioContext = new AudioContextCtor();
+          audioContextRef.current = audioContext;
+          // Some browsers create AudioContext in a "suspended" state (autoplay policy); a
+          // suspended context silently drops everything routed through it, which would
+          // recreate the exact silent-recording bug this mixing is meant to fix.
+          if (audioContext.state === "suspended") void audioContext.resume().catch(() => {});
+          recorderAudioTrack = mixAudioTracks(audioContext, audioTracksToMix);
+          mixedTrackRef.current = recorderAudioTrack;
+        } else {
+          recorderAudioTrack = audioTracksToMix[0] ?? null;
+        }
+
+        if (!recorderAudioTrack) setNoSystemAudio(true);
+
+        streamRef.current = stream; // raw display stream (video + tab audio), for cleanup/ended-listener
+        stream = new MediaStream(recorderAudioTrack ? [videoTrack, recorderAudioTrack] : [videoTrack]);
       } else {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
       }
 
-      streamRef.current = stream;
       chunksRef.current = [];
 
       const mimeType = pickSupportedMimeType(mimeCandidatesForMode(mode));
@@ -244,11 +296,12 @@ export function RecordPanel({
             <MonitorUp className="h-5 w-5 text-primary" />
             <span className="font-medium">Ekran/Sekme Sesi</span>
             <span className="text-sm text-muted-foreground">
-              Google Meet veya Zoom sekmesini/penceresini paylaşın, toplantı sesini yakalar.
+              Google Meet veya Zoom sekmesini/penceresini paylaşın; toplantı sesini ve
+              mikrofonunuzu birlikte yakalar.
             </span>
             <span className="text-xs text-muted-foreground">
               Açılan pencerede Chrome Sekmesi&apos;ni seçin ve &quot;Sekme sesini paylaş&quot;
-              kutusunu işaretleyin.
+              kutusunu işaretleyin. Sesinizin de kaydedilmesi için mikrofon izni de istenecek.
             </span>
           </button>
           <button
@@ -291,7 +344,7 @@ export function RecordPanel({
       {noSystemAudio && isActive && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Sistem sesi algılanmadı</AlertTitle>
+          <AlertTitle>Ses algılanamadı</AlertTitle>
           <AlertDescription>{SYSTEM_AUDIO_UNAVAILABLE_MESSAGE}</AlertDescription>
         </Alert>
       )}
