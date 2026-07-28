@@ -90,10 +90,10 @@ cd apps/web && npm run dev
 | `WHISPER_MODEL` | Whisper model boyutu (`tiny`, `base`, `small`, `medium`, `large-v3`). CPU için `small` önerilir. |
 | `WHISPER_LANGUAGE` | Varsayılan dil (`tr`). `auto` ile otomatik algılama yapılabilir. |
 | `OPENROUTER_API_KEY` | OpenRouter API anahtarı. **Boş bırakılırsa uygulama yerel özet moduna geçer.** |
-| `OPENROUTER_MODEL` | Kullanılacak ücretsiz model, örn. `meta-llama/llama-3.1-8b-instruct:free`. Güncel ücretsiz modeller için https://openrouter.ai/models?max_price=0 adresine bakın. |
+| `OPENROUTER_MODEL` | Kullanılacak model, örn. `openrouter/free` veya `meta-llama/llama-3.1-8b-instruct:free`. Güncel ücretsiz modeller için https://openrouter.ai/models?max_price=0 adresine bakın; model adları zamanla değişebilir. |
 | `ENABLE_EXTERNAL_AI` | `false` yaparak tüm dış AI çağrılarını tamamen kapatabilirsiniz (yalnızca yerel mod). |
 | `FRONTEND_URL` | CORS için izin verilen frontend adresi. |
-| `MAX_UPLOAD_MB` | Maksimum yükleme dosya boyutu. |
+| `MAX_UPLOAD_SIZE_MB` | Maksimum yükleme dosya boyutu (MB). **`0` = sınır yok** (varsayılan). Dosyalar boyuttan bağımsız olarak her zaman diske parça parça (streaming) yazılır, asla tamamı bellekte tutulmaz. Yalnızca disk alanınızla sınırlısınız. |
 
 ### OpenRouter API anahtarı nasıl alınır
 
@@ -157,6 +157,10 @@ docs/     Demo script and supplementary docs
 **No-speech handling** (`apps/api/app/services/transcription.py`): transcription first runs with VAD (voice-activity detection) filtering. If VAD strips all audio (e.g. a silent or non-speech file), it retries once **without** VAD. If both attempts return zero segments, the pipeline raises a clear error surfaced verbatim on the meeting's error screen — "Ses dosyasında konuşma algılanamadı..." — and analysis is never run against an empty transcript.
 
 **Structured AI output**: LLM responses are requested as JSON matching a Pydantic schema (`AnalysisLLMResult`, `ActionItemListLLM`). One repair attempt is made on parse failure; if that also fails, the local fallback is used — malformed JSON is never persisted, and raw model errors are never shown to the user.
+
+**Resilient OpenRouter calls** (`apps/api/app/services/analysis.py`): every request uses explicit connect (10s) and read (60s) timeouts — nothing waits indefinitely. Only transient failures (timeout, connection error, HTTP 429/502/503/504) are retried, up to 2 times with short exponential backoff; authentication (401/403) and malformed-request (400/422) errors fail fast with no retry. Only safe metadata is logged (model, duration, HTTP status, retry count, transcript chunk count) — the API key and the transcript/response content are never logged. A meeting's AI analysis can never fail the whole meeting: any OpenRouter failure at any stage falls back to the local extractive summary automatically, clearly labeled "Yerel Analiz" in the UI, with a "Yeniden Analiz Et" button to retry later.
+
+**Long-transcript chunking**: transcripts are never sent to OpenRouter in a single request. They are split into ~4000-character chunks (preserving segment timestamps), each chunk is summarized independently, and the chunk summaries are combined into one final, still-bounded request that produces the structured summary/decisions/risks output. Action items are extracted per chunk and merged with duplicates removed.
 
 **Grounded Q&A** (`apps/api/app/services/qa.py`): transcript segments are chunked and ranked with a lightweight BM25-like scorer (no vector DB). Only the top-ranked excerpts are sent to the LLM, explicitly marked as untrusted source data in the system prompt (prompt-injection mitigation). If no relevant excerpt is found, the API returns "Bu bilgi toplantı içeriğinde bulunmuyor." without calling the LLM.
 
