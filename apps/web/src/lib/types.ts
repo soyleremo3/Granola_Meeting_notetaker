@@ -72,3 +72,11 @@ export interface ProcessingStatus {
   stage_label: string;
   error_message: string | null;
 }
+
+export interface HealthStatus {
+  status: string;
+  ai_enabled: boolean;
+  openrouter_model: string | null;
+  local_fallback_available: boolean;
+  whisper_model: string;
+}

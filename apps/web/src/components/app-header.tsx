@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ListChecks, NotebookPen, Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { AiSettingsDialog } from "@/components/ai-settings-dialog";
 import { cn } from "@/lib/utils";
 
 export function AppHeader() {
@@ -17,6 +18,7 @@ export function AppHeader() {
         </Link>
 
         <nav aria-label="Ana gezinme" className="flex items-center gap-2">
+          <AiSettingsDialog />
           <Link
             href="/meetings"
             aria-label="Toplantılar"

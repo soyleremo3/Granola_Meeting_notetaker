@@ -1,5 +1,6 @@
 import type {
   ActionItem,
+  HealthStatus,
   MeetingAnalysis,
   MeetingDetail,
   MeetingSummary,
@@ -43,7 +44,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  health: () => request<{ status: string; ai_enabled: boolean; whisper_model: string }>("/health"),
+  health: () => request<HealthStatus>("/health"),
 
   listMeetings: (params?: { search?: string; sort?: string; status_filter?: string }) => {
     const query = new URLSearchParams();
