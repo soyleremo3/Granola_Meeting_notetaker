@@ -77,6 +77,50 @@ def test_pipeline_surfaces_friendly_message_for_video_only_recording(client, mon
         db.close()
 
 
+def test_transcript_preserved_when_analysis_stage_raises(client, monkeypatch):
+    """Even if the analysis stage blows up unexpectedly, the already-committed transcript
+    (Part 3, item 49/51) must never be lost — only the analysis is marked as failed."""
+    meeting_id = _create_meeting_with_media(client)
+
+    monkeypatch.setattr(storage, "convert_to_wav", lambda src, mid: Path("fake.wav"))
+    monkeypatch.setattr(storage, "probe_duration_seconds", lambda path: 3.0)
+
+    class _Result:
+        def __init__(self):
+            self.segments = [
+                transcription.TranscriptSegmentResult(
+                    0, 0.0, 2.0, "Merhaba, karar verildi ki devam edeceğiz."
+                )
+            ]
+            self.language = "tr"
+            self.duration = 2.0
+
+    monkeypatch.setattr(transcription, "transcribe_audio", lambda *a, **kw: _Result())
+
+    from app.services import analysis as analysis_service
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("unexpected analysis crash")
+
+    monkeypatch.setattr(analysis_service, "generate_meeting_analysis", _raise)
+
+    pipeline.run_full_pipeline(meeting_id, str(Path("fake_source.wav")))
+
+    db = SessionLocal()
+    try:
+        meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
+        assert meeting.status == "error"
+        assert meeting.error_message
+
+        segments = (
+            db.query(models.TranscriptSegment).filter(models.TranscriptSegment.meeting_id == meeting_id).all()
+        )
+        assert len(segments) == 1
+        assert segments[0].text == "Merhaba, karar verildi ki devam edeceğiz."
+    finally:
+        db.close()
+
+
 def test_pipeline_succeeds_and_never_analyzes_empty_transcript(client, monkeypatch):
     meeting_id = _create_meeting_with_media(client)
 

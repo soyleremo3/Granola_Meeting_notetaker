@@ -2,10 +2,17 @@
 
 The fallback never claims to be an LLM-quality summary — callers must surface
 `source == "fallback"` to the user so expectations stay honest.
+
+Long transcripts are never sent to the model in one request: they are split into
+bounded chunks, each chunk is summarized (or mined for action items) independently,
+and the per-chunk results are combined into one final, still-bounded request. This
+keeps every OpenRouter call small and fast regardless of meeting length.
 """
 
 import json
+import logging
 import re
+import time
 
 import httpx
 from pydantic import ValidationError
@@ -13,8 +20,27 @@ from pydantic import ValidationError
 from app.config import settings
 from app.schemas import ActionItemListLLM, AnalysisLLMResult
 
-SUMMARY_SYSTEM_PROMPT = """Sen bir toplantı analiz asistanısın. Sana Türkçe bir toplantı dökümü verilecek.
-Yalnızca dökümde GEÇEN bilgilere dayanarak analiz yap. Bilgi yoksa uydurma, ilgili alanı boş bırak.
+logger = logging.getLogger(__name__)
+
+# --- Network resilience (Part 3) ---
+# Explicit, bounded timeouts — a hung OpenRouter request must never stall a meeting forever.
+CONNECT_TIMEOUT_SECONDS = 10.0
+READ_TIMEOUT_SECONDS = 60.0
+WRITE_TIMEOUT_SECONDS = 10.0
+POOL_TIMEOUT_SECONDS = 10.0
+
+MAX_RETRIES = 2
+RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
+BACKOFF_BASE_SECONDS = 0.5
+
+# --- Transcript chunking (Part 3) ---
+CHUNK_CHAR_SIZE = 4000  # roughly ~1000 tokens per chunk — keeps each request small
+MAX_CHUNKS = 12  # hard cap so pathologically long meetings still bound total calls
+CONDENSED_TEXT_MAX_CHARS = 12000
+
+SUMMARY_SYSTEM_PROMPT = """Sen bir toplantı analiz asistanısın. Sana Türkçe bir toplantı dökümü (veya bölüm özetleri) verilecek.
+Yalnızca verilen metinde GEÇEN bilgilere dayanarak analiz yap. Bilgi yoksa uydurma, ilgili alanı boş bırak.
+Zaman damgaları [MM:SS] biçiminde verilmişse, mümkün olan yerlerde referans olarak koru.
 Yanıtını SADECE aşağıdaki alanlara sahip geçerli bir JSON nesnesi olarak ver, başka hiçbir metin ekleme:
 {
   "summary": "kısa yönetici özeti (2-4 cümle, Türkçe)",
@@ -24,7 +50,16 @@ Yanıtını SADECE aşağıdaki alanlara sahip geçerli bir JSON nesnesi olarak 
   "unresolved_questions": ["cevaplanmamış soru 1"],
   "follow_ups": ["takip edilmesi gereken madde 1"]
 }
-Tüm liste elemanları ve metinler Türkçe olmalı. Dökümde olmayan bilgiyi asla ekleme."""
+Tüm liste elemanları ve metinler Türkçe olmalı. Metinde olmayan bilgiyi asla ekleme."""
+
+CHUNK_SUMMARY_SYSTEM_PROMPT = """Sen bir toplantı dökümünün BİR BÖLÜMÜNÜ özetleyen asistansın. Sana dökümün yalnızca bir kısmı verilecek; bu tüm toplantı değildir.
+Yalnızca bu bölümde GEÇEN bilgilere dayan, uydurma. Zaman damgalarını [MM:SS] biçiminde koru.
+Aşağıdaki başlıklar altında kısa Türkçe maddeler halinde çıktı ver (düz metin, JSON değil):
+Konular:
+Kararlar:
+Riskler:
+Cevaplanmamış Sorular:
+Bir başlıkta madde yoksa altına "Yok" yaz."""
 
 ACTION_ITEMS_SYSTEM_PROMPT = """Sen bir toplantı dökümünden yapılacaklar listesi çıkaran bir asistansın.
 Yalnızca dökümde açıkça belirtilen görevleri çıkar. Atanan kişi veya tarih dökümde açıkça geçmiyorsa null bırak, ASLA uydurma.
@@ -43,14 +78,17 @@ Yanıtını SADECE aşağıdaki formatta geçerli bir JSON nesnesi olarak ver:
 }"""
 
 
-def build_transcript_text(segments: list, max_chars: int = 12000) -> str:
+def build_transcript_text(segments: list, max_chars: int = CONDENSED_TEXT_MAX_CHARS) -> str:
     lines = []
     for seg in segments:
         ts = f"[{_format_ts(seg.start_time)}]"
         lines.append(f"{ts} {seg.text}")
-    text = "\n".join(lines)
+    return _truncate_text("\n".join(lines), max_chars)
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
     if len(text) > max_chars:
-        text = text[:max_chars] + "\n...(döküm kısaltıldı)"
+        return text[:max_chars] + "\n...(metin kısaltıldı)"
     return text
 
 
@@ -73,42 +111,157 @@ def _extract_json(raw: str) -> dict:
     return json.loads(raw)
 
 
+def _split_into_chunks(segments: list, max_chars: int = CHUNK_CHAR_SIZE) -> list[list]:
+    """Groups segments into chunks bounded by character count, preserving order and timestamps."""
+    chunks: list[list] = []
+    current: list = []
+    current_len = 0
+    for seg in segments:
+        seg_len = len(seg.text) + 12  # rough allowance for the "[MM:SS] " prefix
+        if current and current_len + seg_len > max_chars:
+            chunks.append(current)
+            current = []
+            current_len = 0
+        current.append(seg)
+        current_len += seg_len
+    if current:
+        chunks.append(current)
+    return chunks[:MAX_CHUNKS]
+
+
 def _call_openrouter(system_prompt: str, user_content: str) -> str | None:
+    """Calls OpenRouter with bounded timeouts and limited retries on transient failures only.
+
+    Retries (up to MAX_RETRIES, short exponential backoff): request timeout, connection error,
+    HTTP 429/502/503/504. Never retried: authentication (401/403) or malformed-request (400/422)
+    errors — those fail fast so the caller can fall back immediately.
+
+    Only safe metadata is logged (model, duration, status, retry count) — never the API key or
+    the transcript/response content.
+    """
     if not settings.ai_enabled:
         return None
-    try:
-        with httpx.Client(timeout=90) as client:
-            resp = client.post(
-                f"{settings.openrouter_base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.openrouter_model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content},
-                    ],
-                    "temperature": 0.2,
-                },
+
+    timeout = httpx.Timeout(
+        connect=CONNECT_TIMEOUT_SECONDS,
+        read=READ_TIMEOUT_SECONDS,
+        write=WRITE_TIMEOUT_SECONDS,
+        pool=POOL_TIMEOUT_SECONDS,
+    )
+
+    attempt = 0
+    while True:
+        started = time.monotonic()
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.post(
+                    f"{settings.openrouter_base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {settings.openrouter_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": settings.openrouter_model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "temperature": 0.2,
+                    },
+                )
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            duration_ms = int((time.monotonic() - started) * 1000)
+            if attempt < MAX_RETRIES:
+                logger.warning(
+                    "openrouter_call_retry model=%s error=%s duration_ms=%d attempt=%d",
+                    settings.openrouter_model,
+                    type(exc).__name__,
+                    duration_ms,
+                    attempt,
+                )
+                time.sleep(BACKOFF_BASE_SECONDS * (2**attempt))
+                attempt += 1
+                continue
+            logger.warning(
+                "openrouter_call_failed model=%s error=%s duration_ms=%d retries=%d",
+                settings.openrouter_model,
+                type(exc).__name__,
+                duration_ms,
+                attempt,
             )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-    except Exception:
+            return None
+        except Exception:
+            logger.exception("openrouter_call_unexpected_error model=%s", settings.openrouter_model)
+            return None
+
+        duration_ms = int((time.monotonic() - started) * 1000)
+
+        if resp.status_code == 200:
+            logger.info(
+                "openrouter_call_ok model=%s status=%d duration_ms=%d retries=%d",
+                settings.openrouter_model,
+                resp.status_code,
+                duration_ms,
+                attempt,
+            )
+            try:
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+            except (json.JSONDecodeError, KeyError, IndexError):
+                logger.warning(
+                    "openrouter_call_bad_response model=%s status=%d",
+                    settings.openrouter_model,
+                    resp.status_code,
+                )
+                return None
+
+        if resp.status_code in RETRYABLE_STATUS_CODES and attempt < MAX_RETRIES:
+            logger.warning(
+                "openrouter_call_retry model=%s status=%d duration_ms=%d attempt=%d",
+                settings.openrouter_model,
+                resp.status_code,
+                duration_ms,
+                attempt,
+            )
+            time.sleep(BACKOFF_BASE_SECONDS * (2**attempt))
+            attempt += 1
+            continue
+
+        logger.warning(
+            "openrouter_call_failed model=%s status=%d duration_ms=%d retries=%d",
+            settings.openrouter_model,
+            resp.status_code,
+            duration_ms,
+            attempt,
+        )
         return None
 
 
 def generate_meeting_analysis(segments: list) -> tuple[AnalysisLLMResult, str, str | None]:
-    transcript_text = build_transcript_text(segments)
-
-    if not transcript_text.strip():
+    if not any(seg.text.strip() for seg in segments):
         return AnalysisLLMResult(), "fallback", None
+    if not settings.ai_enabled:
+        return _fallback_summary(segments), "fallback", None
 
-    raw = _call_openrouter(SUMMARY_SYSTEM_PROMPT, transcript_text)
+    chunks = _split_into_chunks(segments)
+    if len(chunks) <= 1:
+        condensed_text = build_transcript_text(segments)
+    else:
+        logger.info("analysis_chunking meeting_chunk_count=%d", len(chunks))
+        chunk_summaries = []
+        for idx, chunk in enumerate(chunks):
+            chunk_text = build_transcript_text(chunk, max_chars=CHUNK_CHAR_SIZE + 2000)
+            summary = _call_openrouter(CHUNK_SUMMARY_SYSTEM_PROMPT, chunk_text)
+            if summary:
+                time_range = f"{_format_ts(chunk[0].start_time)}-{_format_ts(chunk[-1].end_time)}"
+                chunk_summaries.append(f"--- Bölüm {idx + 1} ({time_range}) ---\n{summary.strip()}")
+        if not chunk_summaries:
+            return _fallback_summary(segments), "fallback", None
+        condensed_text = _truncate_text("\n\n".join(chunk_summaries), CONDENSED_TEXT_MAX_CHARS)
+
+    raw = _call_openrouter(SUMMARY_SYSTEM_PROMPT, condensed_text)
     if raw:
-        result = _parse_with_repair(raw, AnalysisLLMResult, SUMMARY_SYSTEM_PROMPT, transcript_text)
+        result = _parse_with_repair(raw, AnalysisLLMResult, SUMMARY_SYSTEM_PROMPT, condensed_text)
         if result is not None:
             return result, "openrouter", settings.openrouter_model
 
@@ -116,24 +269,54 @@ def generate_meeting_analysis(segments: list) -> tuple[AnalysisLLMResult, str, s
 
 
 def generate_action_items(segments: list) -> tuple[ActionItemListLLM, str, str | None]:
-    transcript_text = build_transcript_text(segments)
-
-    if not transcript_text.strip():
+    if not any(seg.text.strip() for seg in segments):
         return ActionItemListLLM(), "fallback", None
+    if not settings.ai_enabled:
+        return _fallback_action_items(segments), "fallback", None
 
-    raw = _call_openrouter(ACTION_ITEMS_SYSTEM_PROMPT, transcript_text)
-    if raw:
-        result = _parse_with_repair(raw, ActionItemListLLM, ACTION_ITEMS_SYSTEM_PROMPT, transcript_text)
+    chunks = _split_into_chunks(segments)
+    if len(chunks) > 1:
+        logger.info("action_items_chunking meeting_chunk_count=%d", len(chunks))
+
+    collected: list = []
+    any_success = False
+    for chunk in chunks:
+        chunk_text = build_transcript_text(chunk, max_chars=CHUNK_CHAR_SIZE + 2000)
+        raw = _call_openrouter(ACTION_ITEMS_SYSTEM_PROMPT, chunk_text)
+        if not raw:
+            continue
+        result = _parse_with_repair(raw, ActionItemListLLM, ACTION_ITEMS_SYSTEM_PROMPT, chunk_text)
         if result is not None:
-            return result, "openrouter", settings.openrouter_model
+            any_success = True
+            collected.extend(result.items)
 
-    return _fallback_action_items(segments), "fallback", None
+    if not any_success:
+        return _fallback_action_items(segments), "fallback", None
+
+    return (
+        ActionItemListLLM(items=_dedupe_action_items(collected)[:20]),
+        "openrouter",
+        settings.openrouter_model,
+    )
+
+
+def _dedupe_action_items(items: list) -> list:
+    seen: set[str] = set()
+    deduped = []
+    for item in items:
+        key = item.description.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
 
 
 def _parse_with_repair(raw: str, model_cls, system_prompt: str, user_content: str):
     for attempt_raw in (raw, None):
         if attempt_raw is None:
-            # One repair attempt: ask the model again with a stricter reminder.
+            # One repair attempt: ask the model again with a stricter reminder, using the same
+            # (already-bounded) user_content — never the original full transcript.
             attempt_raw = _call_openrouter(
                 system_prompt + "\n\nÖNEMLİ: Yanıtın SADECE geçerli JSON olmalı, başka hiçbir şey yazma.",
                 user_content,
