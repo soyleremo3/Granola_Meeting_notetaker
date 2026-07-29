@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     api_port: int = 8000
     frontend_url: str = "http://localhost:3000"
 
+    # Matches the "Origin" header sent by the Chrome extension (apps/extension), which is always
+    # chrome-extension://<extension-id> regardless of the backend/frontend URLs configured in the
+    # extension's settings. Kept as a regex (rather than a fixed origin) since the extension ID
+    # differs between a packed/store install and an unpacked "Load unpacked" dev install.
+    extension_origin_regex: str = r"^chrome-extension://[a-z]{32}$"
+
     database_url: str = "sqlite:///./data/granola.db"
     storage_dir: str = "./storage"
 

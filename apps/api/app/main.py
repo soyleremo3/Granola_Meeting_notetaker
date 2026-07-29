@@ -24,6 +24,7 @@ app = FastAPI(title="Granola TR API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_url],
+    allow_origin_regex=settings.extension_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
