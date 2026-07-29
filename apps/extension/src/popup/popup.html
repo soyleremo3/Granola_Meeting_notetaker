@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Not Defteri Kaydedici</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="popup__header">
+        <span class="popup__title">Not Defteri Kaydedici</span>
+        <button type="button" id="settings-btn" class="popup__icon-btn" title="Ayarlar" aria-label="Ayarlar">
+          ⚙
+        </button>
+      </header>
+
+      <section class="popup__platform" id="platform-row" hidden>
+        <span id="platform-label"></span>
+      </section>
+
+      <section class="popup__status">
+        <p id="status-text" class="popup__status-text">Durum kontrol ediliyor…</p>
+        <p id="timer-text" class="popup__timer" hidden>00:00</p>
+        <p id="error-text" class="popup__error" hidden></p>
+      </section>
+
+      <section class="popup__actions">
+        <button type="button" id="start-btn" class="popup__btn popup__btn--primary" hidden>
+          Kaydı Başlat
+        </button>
+        <button type="button" id="stop-btn" class="popup__btn popup__btn--danger" hidden>Kaydı Durdur</button>
+        <button type="button" id="open-result-btn" class="popup__btn popup__btn--primary" hidden>
+          Sonucu Aç
+        </button>
+        <button type="button" id="retry-btn" class="popup__btn" hidden>Tekrar Yükle</button>
+        <button type="button" id="download-btn" class="popup__btn" hidden>Yerel WebM İndir</button>
+        <button type="button" id="discard-btn" class="popup__btn popup__btn--ghost" hidden>Vazgeç</button>
+      </section>
+
+      <p class="popup__consent">
+        Kayda başlamadan önce tüm katılımcıların iznini aldığınızdan emin olun.
+      </p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

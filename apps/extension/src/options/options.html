@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Not Defteri Kaydedici — Ayarlar</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        max-width: 480px;
+        font-family: "Segoe UI", Roboto, Arial, sans-serif;
+        background: #14161d;
+        color: #f0f1f4;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 4px;
+      }
+      p.lead {
+        margin: 0 0 20px;
+        font-size: 13px;
+        color: #9aa0ad;
+      }
+      fieldset {
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
+        padding: 14px;
+        margin: 0 0 16px;
+      }
+      legend {
+        font-size: 12px;
+        color: #9aa0ad;
+        padding: 0 6px;
+      }
+      label.field {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      label.field span {
+        display: block;
+        margin-bottom: 4px;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: #1f2430;
+        color: inherit;
+        font-size: 13px;
+      }
+      .field-error {
+        color: #ff8a8c;
+        font-size: 11px;
+        margin-top: 4px;
+        min-height: 14px;
+      }
+      label.toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        margin-bottom: 10px;
+      }
+      label.toggle:last-child {
+        margin-bottom: 0;
+      }
+      button {
+        appearance: none;
+        border: none;
+        border-radius: 8px;
+        background: #4f8cff;
+        color: #fff;
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #3d7af0;
+      }
+      #save-status {
+        margin-left: 10px;
+        font-size: 12px;
+        color: #9aa0ad;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Not Defteri Kaydedici — Ayarlar</h1>
+    <p class="lead">
+      Google Meet ve Zoom Web toplantılarını kaydetme ve yerel Not Defteri sunucusuna yükleme
+      davranışını buradan yönetin.
+    </p>
+
+    <form id="settings-form">
+      <fieldset>
+        <legend>Sunucu Adresleri</legend>
+        <label class="field">
+          <span>Backend adresi</span>
+          <input type="text" id="backend-url" placeholder="http://localhost:8000" />
+          <div class="field-error" id="backend-url-error"></div>
+        </label>
+        <label class="field">
+          <span>Frontend adresi</span>
+          <input type="text" id="frontend-url" placeholder="http://localhost:3000" />
+          <div class="field-error" id="frontend-url-error"></div>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Algılama</legend>
+        <label class="toggle">
+          <input type="checkbox" id="meet-detection" />
+          Google Meet algılamayı etkinleştir
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="zoom-detection" />
+          Zoom Web algılamayı etkinleştir
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="in-page-banner" />
+          Sayfa içi bildirim şeridini göster
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Kayıt Davranışı</legend>
+        <label class="toggle">
+          <input type="checkbox" id="auto-stop" />
+          Toplantı bitince kaydı otomatik durdur
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="auto-open-result" />
+          İşlem bitince toplantı sayfasını otomatik aç
+        </label>
+      </fieldset>
+
+      <button type="submit">Kaydet</button>
+      <span id="save-status"></span>
+    </form>
+
+    <script src="options.js"></script>
+  </body>
+</html>
