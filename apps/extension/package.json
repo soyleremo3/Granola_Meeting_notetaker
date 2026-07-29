@@ -1,0 +1,24 @@
+{
+  "name": "extension",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Not Defteri Chrome eklentisi: Google Meet ve Zoom Web toplantılarını tek tıkla kaydeder.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "test": "vitest run",
+    "lint": "eslint src tests build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "@types/chrome": "^0.0.287",
+    "esbuild": "^0.24.0",
+    "eslint": "^9",
+    "globals": "^15.14.0",
+    "typescript": "^5",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^4.1.10"
+  }
+}

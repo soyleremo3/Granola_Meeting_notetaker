@@ -13,6 +13,11 @@
     "lint:web": "npm --prefix apps/web run lint",
     "typecheck:web": "npm --prefix apps/web exec tsc -- --noEmit",
     "build:web": "npm --prefix apps/web run build",
-    "test:web": "npm --prefix apps/web run test"
+    "test:web": "npm --prefix apps/web run test",
+    "extension:dev": "npm --prefix apps/extension run dev",
+    "extension:build": "npm --prefix apps/extension run build",
+    "extension:test": "npm --prefix apps/extension run test",
+    "extension:lint": "npm --prefix apps/extension run lint",
+    "extension:typecheck": "npm --prefix apps/extension run typecheck"
   }
 }
