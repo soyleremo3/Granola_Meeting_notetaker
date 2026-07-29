@@ -15,6 +15,7 @@ Granola'dan ilham alan, **tamamen yerel çalışan** bir Türkçe yapay zeka top
 - [Demo Verisi](#demo-verisi)
 - [Demo Yürüyüşü (Canlı Sunum)](#demo-yürüyüşü-canlı-sunum)
 - [Mimari](#mimari-english-technical-notes)
+- [Chrome Eklentisi](#chrome-eklentisi)
 - [Sorun Giderme](#sorun-giderme)
 - [Testler](#testler)
 - [Değerlendirme Kontrol Listesi](#değerlendirme-kontrol-listesi)
@@ -166,6 +167,20 @@ docs/     Demo script and supplementary docs
 
 **Note on component library**: shadcn/ui in this project generation targets [Base UI](https://base-ui.com) primitives (not Radix). Polymorphic rendering uses the `render` prop (`<Button render={<Link href="/x" />}>`) instead of `asChild`; links styled as buttons use `buttonVariants()` directly on the `<Link>` per Base UI's guidance against wrapping anchors in the `Button` component.
 
+## Chrome Eklentisi
+
+`apps/extension`, Google Meet ve Zoom Web Client toplantılarını tek tıkla kaydedip bu projenin
+mevcut backend/frontend'ine yükleyen ayrı bir Manifest V3 Chrome eklentisidir. Var olan dosya
+yükleme ve manuel ekran/mikrofon kaydı özelliklerinin yerine geçmez; onlara ek bir üçüncü yoldur.
+
+```bash
+npm run extension:build
+```
+
+`apps/extension/dist` klasörünü `chrome://extensions` → Geliştirici modu → Paketlenmemiş öğe
+yükle ile yükleyin. Kurulum, kullanım, test adımları, bilinen sınırlamalar ve gizlilik bilgisi
+için bkz. [apps/extension/README.md](apps/extension/README.md).
+
 ## Sorun Giderme
 
 **"faster-whisper kurulamıyor / ctranslate2 hata veriyor"**
@@ -204,6 +219,12 @@ npm run lint
 npx tsc --noEmit
 npm run test
 npm run build
+
+# Chrome eklentisi
+npm run extension:lint
+npm run extension:typecheck
+npm run extension:test
+npm run extension:build
 ```
 
 ## Değerlendirme Kontrol Listesi
@@ -229,6 +250,7 @@ npm run build
 - **faster-whisper `small` modeli** varsayılandır; gürültülü/aksanlı ses veya çok kısa/düşük kaliteli kayıtlarda doğruluk düşebilir. Daha iyi sonuç için `WHISPER_MODEL=medium` veya `large-v3` denenebilir (daha yavaş).
 - **OpenRouter ücretsiz modelleri zaman zaman değişir/kaldırılır**; `OPENROUTER_MODEL` güncel tutulmalıdır.
 - **Mobil ekranlarda temel bir duyarlı (responsive) düzen** vardır; kapsamlı bir görsel/erişilebilirlik denetimi bu aşamada yapılmamıştır (Faz 3'e bırakılmıştır).
+- **Chrome eklentisi gerçek bir Google Meet/Zoom toplantısında uçtan uca doğrulanmamıştır** (bu geliştirme ortamında gerçek bir toplantıya katılmak mümkün değildir); ayrıntılar ve elle test adımları için [apps/extension/README.md](apps/extension/README.md#bilinen-sınırlamalar) içindeki "Bilinen Sınırlamalar" bölümüne bakın.
 
 ## Sürüm Notları (Phase 2 QA)
 
