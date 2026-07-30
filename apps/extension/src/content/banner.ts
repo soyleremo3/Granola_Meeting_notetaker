@@ -52,7 +52,12 @@ export function showRecordingBanner(onStop: () => void, elapsedLabel: string): v
   el.querySelector('[data-action="stop"]')?.addEventListener("click", onStop);
 }
 
-export function showZoomDesktopOnlyNotice(): void {
+/** Generic short-lived info/error notice (start-from-popup redirect, backend error messages, ...). */
+export function showInfoNotice(message: string): void {
   const el = mountBanner("nd-banner--warning");
-  el.textContent = ZOOM_DESKTOP_ONLY_MESSAGE;
+  el.textContent = message;
+}
+
+export function showZoomDesktopOnlyNotice(): void {
+  showInfoNotice(ZOOM_DESKTOP_ONLY_MESSAGE);
 }

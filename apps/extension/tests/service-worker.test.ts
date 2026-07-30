@@ -110,3 +110,110 @@ describe("GET_STATE_REQUESTED", () => {
     expect(state.phase).toBe("recording");
   });
 });
+
+function stateUpdatedMessages() {
+  return fake.sentMessages.filter(
+    (m): m is { type: "STATE_UPDATED"; state: { phase: string; errorMessage: string | null } } =>
+      typeof m === "object" && m !== null && (m as { type?: string }).type === "STATE_UPDATED"
+  );
+}
+
+describe("popup start success", () => {
+  it("starts recording using the tabId the popup queried explicitly, with no sender.tab", async () => {
+    await fake.emitMessage({ type: "MEETING_DETECTED", platform: "meet" }, { tab: { id: 1 } as chrome.tabs.Tab });
+
+    // The popup message carries no sender.tab (a popup isn't itself a tab) — only message.tabId.
+    await fake.emitMessage({ type: "START_RECORDING_REQUESTED", tabId: 1 }, {});
+
+    expect(offscreenStartMessages()).toHaveLength(1);
+  });
+});
+
+describe("chrome.tabCapture failure", () => {
+  it("surfaces a Turkish error and returns to idle instead of failing silently", async () => {
+    fake.behavior.tabCaptureShouldFail = true;
+    await fake.emitMessage({ type: "MEETING_DETECTED", platform: "meet" }, { tab: { id: 1 } as chrome.tabs.Tab });
+
+    await fake.emitMessage({ type: "START_RECORDING_REQUESTED" }, { tab: { id: 1 } as chrome.tabs.Tab });
+
+    expect(offscreenStartMessages()).toHaveLength(0);
+    const state = (await fake.emitMessage({ type: "GET_STATE_REQUESTED" })) as {
+      phase: string;
+      errorMessage: string | null;
+    };
+    expect(state.phase).toBe("idle");
+    expect(state.errorMessage).toMatch(/Chrome bu sekmeyi yakalamaya izin vermedi/);
+    // The error must reach both the popup (broadcast) and the banner (tab-targeted message).
+    const broadcasts = stateUpdatedMessages();
+    expect(broadcasts.some((m) => m.state.errorMessage === state.errorMessage)).toBe(true);
+    expect(fake.tabsSent.some((s) => s.tabId === 1)).toBe(true);
+  });
+});
+
+describe("offscreen document creation failure", () => {
+  it("surfaces a Turkish error when chrome.offscreen.createDocument rejects", async () => {
+    fake.behavior.offscreenCreateShouldFail = true;
+    await fake.emitMessage({ type: "MEETING_DETECTED", platform: "meet" }, { tab: { id: 1 } as chrome.tabs.Tab });
+
+    await fake.emitMessage({ type: "START_RECORDING_REQUESTED" }, { tab: { id: 1 } as chrome.tabs.Tab });
+
+    expect(offscreenStartMessages()).toHaveLength(0);
+    const state = (await fake.emitMessage({ type: "GET_STATE_REQUESTED" })) as {
+      phase: string;
+      errorMessage: string | null;
+    };
+    expect(state.phase).toBe("idle");
+    expect(state.errorMessage).toMatch(/kayıt bileşeni oluşturulamadı/);
+  });
+});
+
+describe("no-audio failure propagation", () => {
+  it("returns to idle with the no-audio Turkish message when offscreen reports OFFSCREEN_NO_AUDIO", async () => {
+    await fake.emitMessage({ type: "MEETING_DETECTED", platform: "meet" }, { tab: { id: 1 } as chrome.tabs.Tab });
+    await fake.emitMessage({ type: "START_RECORDING_REQUESTED" }, { tab: { id: 1 } as chrome.tabs.Tab });
+
+    await fake.emitMessage({ type: "OFFSCREEN_NO_AUDIO" });
+
+    const state = (await fake.emitMessage({ type: "GET_STATE_REQUESTED" })) as {
+      phase: string;
+      errorMessage: string | null;
+    };
+    expect(state.phase).toBe("idle");
+    expect(state.errorMessage).toMatch(/Toplantı sekmesinden ses alınamadı/);
+  });
+});
+
+describe("MediaRecorder failure propagation", () => {
+  it("returns to idle with a Turkish error when offscreen reports OFFSCREEN_RECORDER_FAILED", async () => {
+    await fake.emitMessage({ type: "MEETING_DETECTED", platform: "meet" }, { tab: { id: 1 } as chrome.tabs.Tab });
+    await fake.emitMessage({ type: "START_RECORDING_REQUESTED" }, { tab: { id: 1 } as chrome.tabs.Tab });
+
+    await fake.emitMessage({ type: "OFFSCREEN_RECORDER_FAILED" });
+
+    const state = (await fake.emitMessage({ type: "GET_STATE_REQUESTED" })) as {
+      phase: string;
+      errorMessage: string | null;
+    };
+    expect(state.phase).toBe("idle");
+    expect(state.errorMessage).toMatch(/tarayıcı ses kaydediciyi başlatamadı/);
+  });
+});
+
+describe("recording state propagation", () => {
+  it("broadcasts phase: recording to both the popup channel and the meeting tab once offscreen confirms", async () => {
+    await detectAndStartRecording(1);
+
+    const broadcasts = stateUpdatedMessages();
+    expect(broadcasts.some((m) => m.state.phase === "recording")).toBe(true);
+    expect(
+      fake.tabsSent.some(
+        (s) =>
+          s.tabId === 1 &&
+          typeof s.message === "object" &&
+          s.message !== null &&
+          (s.message as { type?: string }).type === "STATE_UPDATED" &&
+          (s.message as { state?: { phase?: string } }).state?.phase === "recording"
+      )
+    ).toBe(true);
+  });
+});

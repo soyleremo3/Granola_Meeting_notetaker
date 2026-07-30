@@ -129,8 +129,15 @@ async function refresh(): Promise<void> {
   if (state) render(state);
 }
 
-startBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "START_RECORDING_REQUESTED" } satisfies ExtensionMessage);
+startBtn.addEventListener("click", async () => {
+  // Query the tab explicitly rather than trusting background's last-tracked tabId: this is the
+  // tab Chrome just granted chrome.tabCapture permission for by the toolbar-icon click that
+  // opened this popup, so it's the one guaranteed to work.
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  chrome.runtime.sendMessage({
+    type: "START_RECORDING_REQUESTED",
+    tabId: activeTab?.id,
+  } satisfies ExtensionMessage);
 });
 
 stopBtn.addEventListener("click", () => {

@@ -1,7 +1,13 @@
-import { DETECTOR_DEBOUNCE_MS } from "../lib/constants";
+import { DETECTOR_DEBOUNCE_MS, START_FROM_POPUP_MESSAGE } from "../lib/constants";
 import type { ExtensionMessage, Platform, StateSnapshot } from "../lib/messages";
 import { DEFAULT_SETTINGS, loadSettings, type ExtensionSettings } from "../lib/settings";
-import { showDetectedBanner, showRecordingBanner, showZoomDesktopOnlyNotice, removeBanner } from "./banner";
+import {
+  showDetectedBanner,
+  showInfoNotice,
+  showRecordingBanner,
+  showZoomDesktopOnlyNotice,
+  removeBanner,
+} from "./banner";
 import type { MeetingState, PageSnapshot } from "./detectors/types";
 
 /** How long the "ended" verdict must stay true before we act on it — absorbs momentary UI flicker. */
@@ -9,6 +15,10 @@ const ENDED_CONFIRM_MS = 1500;
 
 /** Safety-net re-scan interval; the MutationObserver covers the common case, this catches the rest. */
 const SAFETY_POLL_MS = 4000;
+
+/** How long a one-off notice (start-from-popup redirect, backend error) stays up before the
+ * normal detection loop is allowed to repaint the banner over it. */
+const NOTICE_DURATION_MS = 6000;
 
 export interface DetectorAdapter {
   platform: Platform;
@@ -48,6 +58,7 @@ export function startContentRuntime(adapter: DetectorAdapter): void {
   let latestPhase: StateSnapshot["phase"] = "idle";
   let recordingStartedAt: number | null = null;
   let tickTimer: ReturnType<typeof setInterval> | null = null;
+  let noticeActiveUntil = 0;
 
   function clearTick(): void {
     if (tickTimer) {
@@ -61,8 +72,17 @@ export function startContentRuntime(adapter: DetectorAdapter): void {
     showRecordingBanner(requestStop, formatElapsed(Date.now() - recordingStartedAt));
   }
 
+  function showNotice(message: string): void {
+    noticeActiveUntil = Date.now() + NOTICE_DURATION_MS;
+    showInfoNotice(message);
+  }
+
   function requestStart(): void {
-    chrome.runtime.sendMessage({ type: "START_RECORDING_REQUESTED" } satisfies ExtensionMessage);
+    // chrome.tabCapture only grants per-tab capture permission when the user invokes the
+    // extension itself (its toolbar icon/popup) — a click on this page-injected banner button
+    // does not carry that grant, so calling chrome.tabCapture from here would silently fail.
+    // Redirect to the popup instead of leaving a dead button.
+    showNotice(START_FROM_POPUP_MESSAGE);
   }
 
   function requestStop(): void {
@@ -84,6 +104,10 @@ export function startContentRuntime(adapter: DetectorAdapter): void {
     // A confirmed recording in progress takes priority over re-running join/end detection —
     // the banner just shows the live timer until the background tells us otherwise.
     if (latestPhase === "recording") return;
+
+    // A one-off notice (start-from-popup redirect, backend error) is currently showing —
+    // don't let the normal detection loop repaint over it mid-read.
+    if (Date.now() < noticeActiveUntil) return;
 
     const snapshot = captureSnapshot();
 
@@ -155,12 +179,18 @@ export function startContentRuntime(adapter: DetectorAdapter): void {
 
     clearTick();
     recordingStartedAt = null;
+
+    if (message.state.errorMessage && settings.inPageBannerEnabled) {
+      showNotice(message.state.errorMessage);
+      return;
+    }
+
     if (message.state.phase === "idle") {
       bannerDismissed = false;
       removeBanner();
       void evaluate();
     }
-    // Uploading/processing/ready/error states are surfaced in the popup, not the in-page banner,
-    // to keep the meeting UI uncluttered once the user has already left or stopped recording.
+    // Uploading/processing/ready states with no error are surfaced in the popup, not the in-page
+    // banner, to keep the meeting UI uncluttered once recording has moved past the live phase.
   });
 }

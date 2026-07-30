@@ -22,3 +22,18 @@ export const ZOOM_DESKTOP_ONLY_MESSAGE =
 
 export const BACKEND_UNAVAILABLE_MESSAGE =
   "Yerel Not Defteri sunucusuna ulaşılamadı. Proje klasöründe 'npm run dev' komutunu çalıştırın.";
+
+// Chrome only grants chrome.tabCapture per-tab permission when the user invokes the extension
+// itself (its toolbar icon/popup) — a click on a page-injected banner button doesn't carry that
+// grant, so the banner redirects here instead of trying (and silently failing) to start capture.
+export const START_FROM_POPUP_MESSAGE =
+  "Kaydı başlatmak için tarayıcı araç çubuğundaki Not Defteri simgesine tıklayın.";
+
+export const TAB_CAPTURE_FAILED_MESSAGE =
+  "Kayıt başlatılamadı: Chrome bu sekmeyi yakalamaya izin vermedi. Eklenti simgesinden (popup) tekrar deneyin.";
+
+export const OFFSCREEN_CREATE_FAILED_MESSAGE =
+  "Kayıt başlatılamadı: kayıt bileşeni oluşturulamadı. Sayfayı yenileyip tekrar deneyin.";
+
+export const RECORDER_START_FAILED_MESSAGE =
+  "Kayıt başlatılamadı: tarayıcı ses kaydediciyi başlatamadı. Sayfayı yenileyip tekrar deneyin.";

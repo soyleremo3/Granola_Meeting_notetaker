@@ -64,7 +64,8 @@ async function startRecording(streamId: string, settings: ExtensionSettings): Pr
       } as TabCaptureAudioConstraints,
       video: false,
     });
-  } catch {
+  } catch (err) {
+    console.error("[not-defteri] getUserMedia(tab) failed", err instanceof Error ? err.message : String(err));
     post({ type: "OFFSCREEN_NO_AUDIO" });
     return;
   }
@@ -94,7 +95,15 @@ async function startRecording(streamId: string, settings: ExtensionSettings): Pr
   finalBlob = null;
 
   const mimeType = pickSupportedMimeType();
-  const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  let recorder: MediaRecorder;
+  try {
+    recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  } catch (err) {
+    console.error("[not-defteri] MediaRecorder construction failed", err instanceof Error ? err.message : String(err));
+    cleanupTracks();
+    post({ type: "OFFSCREEN_RECORDER_FAILED" });
+    return;
+  }
 
   recorder.ondataavailable = (event) => collectChunk(chunks, event.data);
   recorder.onerror = (event) => {
@@ -106,8 +115,16 @@ async function startRecording(streamId: string, settings: ExtensionSettings): Pr
     void handleRecordingStopped();
   };
 
+  try {
+    recorder.start(1000);
+  } catch (err) {
+    console.error("[not-defteri] MediaRecorder.start() failed", err instanceof Error ? err.message : String(err));
+    cleanupTracks();
+    post({ type: "OFFSCREEN_RECORDER_FAILED" });
+    return;
+  }
+
   mediaRecorder = recorder;
-  recorder.start(1000);
   phase = "recording";
   post({ type: "OFFSCREEN_RECORDING_STARTED" });
 }

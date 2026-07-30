@@ -1,7 +1,18 @@
 import { isMeetUrl } from "../content/detectors/meet";
 import { isZoomMeetingUrl } from "../content/detectors/zoom";
-import { NO_AUDIO_TRACK_MESSAGE } from "../lib/constants";
-import type { ExtensionMessage, MeetingPhase, OffscreenUploadStageMessage, Platform } from "../lib/messages";
+import {
+  NO_AUDIO_TRACK_MESSAGE,
+  OFFSCREEN_CREATE_FAILED_MESSAGE,
+  RECORDER_START_FAILED_MESSAGE,
+  TAB_CAPTURE_FAILED_MESSAGE,
+} from "../lib/constants";
+import type {
+  ExtensionMessage,
+  MeetingPhase,
+  OffscreenUploadStageMessage,
+  Platform,
+  StartRecordingRequestedMessage,
+} from "../lib/messages";
 import { loadSettings, normalizeUrl } from "../lib/settings";
 import { getState, resetState, setState } from "./state";
 
@@ -73,6 +84,7 @@ async function handleMeetingDetected(platform: Platform, tabId: number): Promise
     recordingStartedAt: null,
     stageLabel: null,
   });
+  await publishState();
 }
 
 async function handleMeetingEnded(tabId: number): Promise<void> {
@@ -90,23 +102,43 @@ async function handleMeetingEnded(tabId: number): Promise<void> {
   }
 }
 
+async function failStart(tabId: number, errorMessage: string): Promise<void> {
+  await setState({ tabId, phase: "idle", errorMessage, recordingStartedAt: null });
+  await publishState();
+}
+
 async function beginRecording(tabId: number, platform: Platform): Promise<void> {
   let streamId: string;
   try {
     streamId = await getTabCaptureStreamId(tabId);
-  } catch {
-    await setState({ phase: "idle", errorMessage: "Kayıt başlatılamadı. Sekmeyi kontrol edip tekrar deneyin." });
-    await publishState();
+  } catch (err) {
+    console.error("[not-defteri] tabCapture.getMediaStreamId failed", {
+      tabId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    await failStart(tabId, TAB_CAPTURE_FAILED_MESSAGE);
     return;
   }
 
-  await ensureOffscreenDocument();
+  try {
+    await ensureOffscreenDocument();
+  } catch (err) {
+    console.error("[not-defteri] offscreen document creation failed", {
+      message: err instanceof Error ? err.message : String(err),
+    });
+    await failStart(tabId, OFFSCREEN_CREATE_FAILED_MESSAGE);
+    return;
+  }
+
   const settings = await loadSettings();
   await setState({ tabId, platform, phase: "detected", errorMessage: null });
   sendToOffscreen({ type: "OFFSCREEN_START_RECORDING", target: "offscreen", streamId, settings });
 }
 
-async function handleStartRequested(sender: chrome.runtime.MessageSender): Promise<void> {
+async function handleStartRequested(
+  message: StartRecordingRequestedMessage,
+  sender: chrome.runtime.MessageSender
+): Promise<void> {
   // Set the guard synchronously, before any await, so two rapid clicks handled in the same tick
   // can't both pass the check before either has had a chance to flip it.
   if (startInFlight) return;
@@ -114,7 +146,10 @@ async function handleStartRequested(sender: chrome.runtime.MessageSender): Promi
 
   try {
     const state = await getState();
-    const tabId = sender.tab?.id ?? state.tabId;
+    // Prefer the tabId the popup queried explicitly at click time (chrome.tabs.query active/
+    // currentWindow) — that is exactly the tab Chrome just granted tabCapture permission for by
+    // the toolbar-icon click that opened the popup. sender.tab?.id covers non-popup callers.
+    const tabId = message.tabId ?? sender.tab?.id ?? state.tabId;
     if (tabId === null || tabId === undefined) return;
     if (state.phase === "recording" || state.phase === "uploading" || state.phase === "processing") return;
     await beginRecording(tabId, state.platform ?? "meet");
@@ -129,7 +164,14 @@ async function handleRecordingStarted(): Promise<void> {
 }
 
 async function handleNoAudio(): Promise<void> {
+  console.error("[not-defteri] offscreen reported no audio track");
   await setState({ phase: "idle", errorMessage: NO_AUDIO_TRACK_MESSAGE, recordingStartedAt: null });
+  await publishState();
+}
+
+async function handleRecorderFailed(): Promise<void> {
+  console.error("[not-defteri] offscreen reported MediaRecorder failure");
+  await setState({ phase: "idle", errorMessage: RECORDER_START_FAILED_MESSAGE, recordingStartedAt: null });
   await publishState();
 }
 
@@ -219,7 +261,7 @@ async function handleMessage(
     case "ZOOM_DESKTOP_ONLY_DETECTED":
       return undefined; // purely informational; the content script already shows its own notice
     case "START_RECORDING_REQUESTED":
-      await handleStartRequested(sender);
+      await handleStartRequested(message, sender);
       return undefined;
     case "STOP_RECORDING_REQUESTED":
       await stopRecording();
@@ -240,6 +282,9 @@ async function handleMessage(
       return getState();
     case "OFFSCREEN_NO_AUDIO":
       await handleNoAudio();
+      return undefined;
+    case "OFFSCREEN_RECORDER_FAILED":
+      await handleRecorderFailed();
       return undefined;
     case "OFFSCREEN_RECORDING_STARTED":
       await handleRecordingStarted();

@@ -17,6 +17,7 @@
     "esbuild": "^0.24.0",
     "eslint": "^9",
     "globals": "^15.14.0",
+    "jsdom": "^30.0.1",
     "typescript": "^5",
     "typescript-eslint": "^8.18.0",
     "vitest": "^4.1.10"

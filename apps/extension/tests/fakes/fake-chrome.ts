@@ -6,6 +6,13 @@
 
 type Listener<Args extends unknown[]> = (...args: Args) => unknown;
 
+export interface FakeChromeBehavior {
+  /** Simulates chrome.tabCapture.getMediaStreamId calling back with a lastError (no per-tab grant). */
+  tabCaptureShouldFail: boolean;
+  /** Simulates chrome.offscreen.createDocument() rejecting. */
+  offscreenCreateShouldFail: boolean;
+}
+
 export interface FakeChrome {
   chrome: typeof chrome;
   emitTabRemoved: (tabId: number) => void;
@@ -16,6 +23,7 @@ export interface FakeChrome {
   createdTabs: Array<{ url: string }>;
   offscreen: { created: boolean; closeCalls: number };
   getSession: () => Record<string, unknown>;
+  behavior: FakeChromeBehavior;
 }
 
 async function flushAsync(): Promise<void> {
@@ -37,6 +45,7 @@ export function createFakeChrome(): FakeChrome {
   let sessionStore: Record<string, unknown> = {};
   let syncStore: Record<string, unknown> = {};
   const offscreenState = { created: false, closeCalls: 0 };
+  const behavior: FakeChromeBehavior = { tabCaptureShouldFail: false, offscreenCreateShouldFail: false };
 
   const fakeChromeObject = {
     runtime: {
@@ -101,11 +110,20 @@ export function createFakeChrome(): FakeChrome {
         _options: { targetTabId: number },
         callback: (streamId: string) => void
       ) => {
+        if (behavior.tabCaptureShouldFail) {
+          fakeChromeObject.runtime.lastError = { message: "Extension has not been invoked for the current page." };
+          callback("");
+          fakeChromeObject.runtime.lastError = undefined;
+          return;
+        }
         callback("fake-stream-id");
       },
     },
     offscreen: {
       createDocument: async () => {
+        if (behavior.offscreenCreateShouldFail) {
+          throw new Error("Only a single offscreen document may be created.");
+        }
         offscreenState.created = true;
       },
       closeDocument: async () => {
@@ -135,5 +153,6 @@ export function createFakeChrome(): FakeChrome {
     createdTabs,
     offscreen: offscreenState,
     getSession: () => sessionStore,
+    behavior,
   };
 }

@@ -45,6 +45,13 @@ export interface ZoomDesktopOnlyMessage {
 
 export interface StartRecordingRequestedMessage {
   type: "START_RECORDING_REQUESTED";
+  /**
+   * The tab to record. The popup always sets this explicitly (queried from
+   * chrome.tabs.query({active, currentWindow}) at click time — that's the tab Chrome just
+   * granted tabCapture permission for by the toolbar-icon click that opened the popup). Omitted
+   * when the message can't originate from a tab-carrying context.
+   */
+  tabId?: number;
 }
 
 export interface StopRecordingRequestedMessage {
@@ -107,6 +114,11 @@ export interface OffscreenNoAudioMessage {
   type: "OFFSCREEN_NO_AUDIO";
 }
 
+/** MediaRecorder itself failed to construct or start (distinct from "no audio track"). */
+export interface OffscreenRecorderFailedMessage {
+  type: "OFFSCREEN_RECORDER_FAILED";
+}
+
 export interface OffscreenRecordingStartedMessage {
   type: "OFFSCREEN_RECORDING_STARTED";
 }
@@ -161,6 +173,7 @@ export type ExtensionMessage =
   | OffscreenDownloadRecordingMessage
   | OffscreenDiscardRecordingMessage
   | OffscreenNoAudioMessage
+  | OffscreenRecorderFailedMessage
   | OffscreenRecordingStartedMessage
   | OffscreenTrackEndedMessage
   | OffscreenUploadStageMessage
