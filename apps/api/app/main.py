@@ -28,6 +28,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Chrome treats a chrome-extension:// page as a more "public" address space than
+    # localhost, so it sends a Private Network Access preflight (Access-Control-Request-
+    # Private-Network) before every request the extension makes to this local backend.
+    # Without this, Starlette answers "Disallowed CORS private-network" and Chrome blocks
+    # the request client-side — the browser's own frontend page never hits this because
+    # localhost-to-localhost isn't a cross-address-space request in the first place.
+    allow_private_network=True,
 )
 
 
