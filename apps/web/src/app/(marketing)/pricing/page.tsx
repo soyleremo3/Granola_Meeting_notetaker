@@ -1,6 +1,5 @@
 import { PlanCard } from "@/components/pricing/plan-card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { buildCheckoutUrl } from "@/lib/lemonsqueezy/checkout";
 
 export const metadata = {
   title: "Fiyatlandırma — Not Defteri",
@@ -31,15 +30,7 @@ export default async function PricingPage() {
     plan = profile?.plan ?? null;
   }
 
-  const variantId = process.env.NEXT_PUBLIC_LEMONSQUEEZY_VARIANT_ID_PRO;
   const isPro = plan === "pro";
-
-  const proCtaHref =
-    !user
-      ? "/signup?redirect=/pricing"
-      : variantId
-        ? buildCheckoutUrl({ variantId, userId: user.id, email: user.email ?? "" })
-        : "/signup";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-24">
@@ -68,8 +59,9 @@ export default async function PricingPage() {
           priceSuffix="/ay"
           description="Yoğun kullanım ve tam özellikler için."
           features={PRO_FEATURES}
-          ctaHref={isPro ? "/dashboard/account" : proCtaHref}
-          ctaLabel={isPro ? "Aktif Plan" : "Pro'ya Geç"}
+          ctaHref={isPro ? "/dashboard/account" : "#"}
+          ctaLabel={isPro ? "Aktif Plan" : "Yakında"}
+          ctaDisabled={!isPro}
           highlighted
         />
       </div>
