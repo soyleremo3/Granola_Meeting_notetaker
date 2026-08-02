@@ -1,12 +1,41 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ListChecks, NotebookPen, Plus } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { CreditCard, ListChecks, NotebookPen, Plus, User } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { AiSettingsDialog } from "@/components/ai-settings-dialog";
+import { SignOutButton } from "@/components/sign-out-button";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 export function AppHeader() {
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user?.email ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -31,6 +60,24 @@ export function AppHeader() {
             <Plus className="h-4 w-4" />
             Yeni Toplantı
           </Link>
+
+          {email && (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Hesap menüsü" />}>
+                <User className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel className="truncate">{email}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem render={<Link href="/dashboard/account" />}>
+                  <CreditCard className="h-4 w-4" />
+                  Hesap ve Abonelik
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <SignOutButton />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </nav>
       </div>
     </header>
