@@ -40,7 +40,7 @@ function NewMeetingContent() {
 
       await api.startProcessing(meeting.id);
       toast.success("Toplantı işleniyor", { description: "Sonuçlar hazır olduğunda göreceksiniz." });
-      router.push(`/meetings/${meeting.id}`);
+      router.push(`/dashboard/meetings/${meeting.id}`);
     } catch (err) {
       setSubmitting(false);
       setUploadProgress(null);

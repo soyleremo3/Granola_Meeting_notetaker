@@ -19,7 +19,7 @@ export default function MeetingsPage() {
         </div>
         <MeetingList
           emptyAction={
-            <Link href="/new" className={buttonVariants()}>
+            <Link href="/dashboard/new" className={buttonVariants()}>
               <Mic className="h-4 w-4" />
               Yeni Toplantı Başlat
             </Link>

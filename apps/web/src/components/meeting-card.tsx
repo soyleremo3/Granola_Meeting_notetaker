@@ -9,7 +9,7 @@ import type { MeetingSummary } from "@/lib/types";
 
 export function MeetingCard({ meeting }: { meeting: MeetingSummary }) {
   return (
-    <Link href={`/meetings/${meeting.id}`}>
+    <Link href={`/dashboard/meetings/${meeting.id}`}>
       <Card className="group h-full gap-3 p-4 transition-colors hover:border-primary/50 hover:shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <h3 className="line-clamp-2 font-medium leading-snug group-hover:text-primary">

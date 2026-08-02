@@ -65,7 +65,7 @@ export function MeetingHeader({
     try {
       await api.deleteMeeting(meeting.id);
       toast.success("Toplantı silindi");
-      router.push("/meetings");
+      router.push("/dashboard/meetings");
     } catch (err) {
       setDeleting(false);
       toast.error("Toplantı silinemedi", {

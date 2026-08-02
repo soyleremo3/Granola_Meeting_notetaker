@@ -27,11 +27,11 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/new?mode=record" className={buttonVariants({ size: "lg" })}>
+            <Link href="/dashboard/new?mode=record" className={buttonVariants({ size: "lg" })}>
               <Mic className="h-4 w-4" />
               Yeni Toplantı
             </Link>
-            <Link href="/new?mode=upload" className={buttonVariants({ size: "lg", variant: "outline" })}>
+            <Link href="/dashboard/new?mode=upload" className={buttonVariants({ size: "lg", variant: "outline" })}>
               <Upload className="h-4 w-4" />
               Dosya Yükle
             </Link>
@@ -41,7 +41,7 @@ export default function DashboardPage() {
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Son Toplantılar</h2>
-            <Link href="/meetings" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            <Link href="/dashboard/meetings" className={buttonVariants({ variant: "ghost", size: "sm" })}>
               Tümünü Gör
             </Link>
           </div>
@@ -49,7 +49,7 @@ export default function DashboardPage() {
             limit={6}
             showControls={false}
             emptyAction={
-              <Link href="/new" className={buttonVariants()}>
+              <Link href="/dashboard/new" className={buttonVariants()}>
                 <Mic className="h-4 w-4" />
                 İlk Toplantını Kaydet
               </Link>
